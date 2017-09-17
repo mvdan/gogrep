@@ -20,9 +20,16 @@ func TestGrep(t *testing.T) {
 		{"someStruct{fld: $x}", "someStruct{fld: a, fld2: b}", false},
 		{"map[int]int{1: $x}", "map[int]int{1: a}", true},
 
+		// func lits
+		{"func($s string) { print($s) }", "func(a string) { print(a) }", true},
+
 		// more types
 		{"struct{field $t}", "struct{field int}", true},
 		{"$x.(string)", "a.(string)", true},
+
+		// parens
+		{"($x)", "(a + b)", true},
+		{"($x)", "a + b", false},
 
 		// unary ops
 		{"-someConst", "- someConst", true},
@@ -49,6 +56,10 @@ func TestGrep(t *testing.T) {
 		// slicing
 		{"$x[:$y]", "a[:1]", true},
 		{"$x[3:]", "a[3:5:5]", false},
+
+		// elipsis
+		{"append($x, $y...)", "append(a, bs...)", true},
+		{"foo($x...)", "foo(a, b)", false},
 	}
 	for _, tc := range tests {
 		match, err := grep(tc.expr, tc.src)

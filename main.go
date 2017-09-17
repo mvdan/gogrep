@@ -90,6 +90,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.CompositeLit:
 		y, ok := node.(*ast.CompositeLit)
 		return ok && m.node(x.Type, y.Type) && m.exprs(x.Elts, y.Elts)
+	case *ast.FuncLit:
+		y, ok := node.(*ast.FuncLit)
+		return ok && m.node(x.Type, y.Type) && m.node(x.Body, y.Body)
 
 	// types
 	case *ast.ArrayType:
@@ -105,8 +108,15 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		// TODO: tags?
 		y, ok := node.(*ast.Field)
 		return ok && m.idents(x.Names, y.Names) && m.node(x.Type, y.Type)
+	case *ast.FuncType:
+		y, ok := node.(*ast.FuncType)
+		return ok && m.fields(x.Params, y.Params) &&
+			m.fields(x.Results, y.Results)
 
 	// other exprs
+	case *ast.ParenExpr:
+		y, ok := node.(*ast.ParenExpr)
+		return ok && m.node(x.X, y.X)
 	case *ast.UnaryExpr:
 		y, ok := node.(*ast.UnaryExpr)
 		return ok && x.Op == y.Op && m.node(x.X, y.X)
@@ -136,9 +146,75 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.TypeAssertExpr)
 		return ok && m.node(x.X, y.X) && m.node(x.Type, y.Type)
 
+	// stmts
+	case *ast.BadStmt:
+		y, ok := node.(*ast.BadStmt)
+		_, _ = y, ok
+	case *ast.DeclStmt:
+		y, ok := node.(*ast.DeclStmt)
+		_, _ = y, ok
+	case *ast.EmptyStmt:
+		y, ok := node.(*ast.EmptyStmt)
+		_, _ = y, ok
+	case *ast.LabeledStmt:
+		y, ok := node.(*ast.LabeledStmt)
+		_, _ = y, ok
+	case *ast.ExprStmt:
+		y, ok := node.(*ast.ExprStmt)
+		return ok && m.node(x.X, y.X)
+	case *ast.SendStmt:
+		y, ok := node.(*ast.SendStmt)
+		_, _ = y, ok
+	case *ast.IncDecStmt:
+		y, ok := node.(*ast.IncDecStmt)
+		_, _ = y, ok
+	case *ast.AssignStmt:
+		y, ok := node.(*ast.AssignStmt)
+		_, _ = y, ok
+	case *ast.GoStmt:
+		y, ok := node.(*ast.GoStmt)
+		_, _ = y, ok
+	case *ast.DeferStmt:
+		y, ok := node.(*ast.DeferStmt)
+		_, _ = y, ok
+	case *ast.ReturnStmt:
+		y, ok := node.(*ast.ReturnStmt)
+		_, _ = y, ok
+	case *ast.BranchStmt:
+		y, ok := node.(*ast.BranchStmt)
+		_, _ = y, ok
+	case *ast.BlockStmt:
+		y, ok := node.(*ast.BlockStmt)
+		return ok && m.stmts(x.List, y.List)
+	case *ast.IfStmt:
+		y, ok := node.(*ast.IfStmt)
+		_, _ = y, ok
+	case *ast.CaseClause:
+		y, ok := node.(*ast.CaseClause)
+		_, _ = y, ok
+	case *ast.SwitchStmt:
+		y, ok := node.(*ast.SwitchStmt)
+		_, _ = y, ok
+	case *ast.TypeSwitchStmt:
+		y, ok := node.(*ast.TypeSwitchStmt)
+		_, _ = y, ok
+	case *ast.CommClause:
+		y, ok := node.(*ast.CommClause)
+		_, _ = y, ok
+	case *ast.SelectStmt:
+		y, ok := node.(*ast.SelectStmt)
+		_, _ = y, ok
+	case *ast.ForStmt:
+		y, ok := node.(*ast.ForStmt)
+		_, _ = y, ok
+	case *ast.RangeStmt:
+		y, ok := node.(*ast.RangeStmt)
+		_, _ = y, ok
+
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
+	return false
 }
 
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
@@ -166,11 +242,26 @@ func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
+	if fields1 == nil || fields2 == nil {
+		return fields1 == fields2
+	}
 	if len(fields1.List) != len(fields2.List) {
 		return false
 	}
 	for i, f1 := range fields1.List {
 		if !m.node(f1, fields2.List[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
+	if len(stmts1) != len(stmts2) {
+		return false
+	}
+	for i, s1 := range stmts1 {
+		if !m.node(s1, stmts2[i]) {
 			return false
 		}
 	}

@@ -25,10 +25,10 @@ func _gogrep() {
        {{ . }}
 }`))
 
-var tmplTypes = template.Must(template.New("exprs").Parse(`
+var tmplType = template.Must(template.New("exprs").Parse(`
 package _gogrep
 
-var _gogrep func({{ . }})`))
+var _gogrep {{ . }}`))
 
 func execTmpl(tmpl *template.Template, src string) string {
 	var buf bytes.Buffer
@@ -86,10 +86,13 @@ func parse(src string) (ast.Node, error) {
 		mainErr = err
 	}
 
-	// types as a last resort, for e.g. chans and interfaces
-	asTypes := execTmpl(tmplTypes, src)
-	if f, err := parser.ParseFile(fset, "", asTypes, 0); err == nil {
-		return f.Decls[0].(*ast.GenDecl).Specs[0], nil
+	// type as a last resort, for e.g. chans and interfaces
+	asType := execTmpl(tmplType, src)
+	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil {
+		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+		if typ := vs.Type; noBadNodes(typ) {
+			return typ, nil
+		}
 	}
 	return nil, mainErr
 }

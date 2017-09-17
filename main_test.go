@@ -11,12 +11,16 @@ import (
 type wantErr string
 
 func tokErr(msg string) wantErr {
-	return wantErr("cannot tokenize expr: "+msg)
+	return wantErr("cannot tokenize expr: " + msg)
 }
 
 func parseErr(msg string) wantErr {
-	return wantErr("cannot parse expr: "+msg)
+	return wantErr("cannot parse expr: " + msg)
 }
+
+type matches uint
+
+var noMatch = matches(0)
 
 func TestGrep(t *testing.T) {
 	tests := []struct {
@@ -31,85 +35,85 @@ func TestGrep(t *testing.T) {
 		{"{", "", parseErr("6:2: expected '}', found 'EOF'")},
 
 		// basic lits
-		{"123", "123", true},
-		{"false", "true", false},
+		{"123", "123", matches(1)},
+		{"false", "true", noMatch},
 
 		// wildcards
-		{"$x", "rune", true},
-		{"foo($x, $x)", "foo(1, 2)", false},
-		{"foo($_, $_)", "foo(1, 2)", true},
-		{"foo($x, $y, $y)", "foo(1, 2, 2)", true},
+		{"$x", "rune", matches(1)},
+		{"foo($x, $x)", "foo(1, 2)", noMatch},
+		{"foo($_, $_)", "foo(1, 2)", matches(1)},
+		{"foo($x, $y, $y)", "foo(1, 2, 2)", matches(1)},
 
 		// many expressions
-		{"$x, $y", "1, 2", true},
-		{"$x, $y", "1", false},
+		{"$x, $y", "1, 2", matches(1)},
+		{"$x, $y", "1", noMatch},
 
 		// composite lits
-		{"[]float64{$x}", "[]float64{3}", true},
-		{"[2]bool{$x, 0}", "[2]bool{3, 1}", false},
-		{"someStruct{fld: $x}", "someStruct{fld: a, fld2: b}", false},
-		{"map[int]int{1: $x}", "map[int]int{1: a}", true},
+		{"[]float64{$x}", "[]float64{3}", matches(1)},
+		{"[2]bool{$x, 0}", "[2]bool{3, 1}", noMatch},
+		{"someStruct{fld: $x}", "someStruct{fld: a, fld2: b}", noMatch},
+		{"map[int]int{1: $x}", "map[int]int{1: a}", matches(1)},
 
 		// func lits
-		{"func($s string) { print($s) }", "func(a string) { print(a) }", true},
-		{"func($x ...$t) {}", "func(a ...int) {}", true},
+		{"func($s string) { print($s) }", "func(a string) { print(a) }", matches(1)},
+		{"func($x ...$t) {}", "func(a ...int) {}", matches(1)},
 
 		// more types
-		{"struct{field $t}", "struct{field int}", true},
-		{"interface{$x() int}", "interface{i() int}", true},
-		{"chan $x", "chan bool", true},
-		{"<-chan $x", "chan bool", false},
-		{"chan $x", "chan<- bool", false},
+		{"struct{field $t}", "struct{field int}", matches(1)},
+		{"interface{$x() int}", "interface{i() int}", matches(1)},
+		{"chan $x", "chan bool", matches(1)},
+		{"<-chan $x", "chan bool", noMatch},
+		{"chan $x", "chan<- bool", noMatch},
 
 		// many types
-		{"chan $x, interface{}", "chan int, interface{}", true},
-		{"chan $x, interface{}", "chan int", false},
+		{"chan $x, interface{}", "chan int, interface{}", matches(1)},
+		{"chan $x, interface{}", "chan int", noMatch},
 
 		// parens
-		{"($x)", "(a + b)", true},
-		{"($x)", "a + b", false},
+		{"($x)", "(a + b)", matches(1)},
+		{"($x)", "a + b", noMatch},
 
 		// unary ops
-		{"-someConst", "- someConst", true},
-		{"*someVar", "* someVar", true},
+		{"-someConst", "- someConst", matches(1)},
+		{"*someVar", "* someVar", matches(1)},
 
 		// binary ops
-		{"$x == $y", "a == b", true},
-		{"$x == $y", "123", false},
-		{"$x == $y", "a != b", false},
-		{"$x - $x", "a - b", false},
+		{"$x == $y", "a == b", matches(1)},
+		{"$x == $y", "123", noMatch},
+		{"$x == $y", "a != b", noMatch},
+		{"$x - $x", "a - b", noMatch},
 
 		// calls
-		{"someFunc($x)", "someFunc(a > b)", true},
+		{"someFunc($x)", "someFunc(a > b)", matches(1)},
 
 		// selector
-		{"$x.Field", "a.Field", true},
-		{"$x.Field", "a.field", false},
-		{"$x.Method()", "a.Method()", true},
+		{"$x.Field", "a.Field", matches(1)},
+		{"$x.Field", "a.field", noMatch},
+		{"$x.Method()", "a.Method()", matches(1)},
 
 		// index
-		{"$x[len($x)-1]", "a[len(a)-1]", true},
-		{"$x[len($x)-1]", "a[len(b)-1]", false},
+		{"$x[len($x)-1]", "a[len(a)-1]", matches(1)},
+		{"$x[len($x)-1]", "a[len(b)-1]", noMatch},
 
 		// slicing
-		{"$x[:$y]", "a[:1]", true},
-		{"$x[3:]", "a[3:5:5]", false},
+		{"$x[:$y]", "a[:1]", matches(1)},
+		{"$x[3:]", "a[3:5:5]", noMatch},
 
 		// type asserts
-		{"$x.(string)", "a.(string)", true},
+		{"$x.(string)", "a.(string)", matches(1)},
 
 		// elipsis
-		{"append($x, $y...)", "append(a, bs...)", true},
-		{"foo($x...)", "foo(a)", false},
-		{"foo($x...)", "foo(a, b)", false},
+		{"append($x, $y...)", "append(a, bs...)", matches(1)},
+		{"foo($x...)", "foo(a)", noMatch},
+		{"foo($x...)", "foo(a, b)", noMatch},
 
 		// many statements
-		{"$x(); $y()", "a(); b(); c()", true},
-		{"$x(); $y()", "a()", false},
+		{"$x(); $y()", "a(); b(); c()", matches(1)},
+		{"$x(); $y()", "a()", noMatch},
 
 		// block
-		{"{ $x }", "{ a() }", true},
-		{"{ $x }", "{ a(); b() }", false},
+		{"{ $x }", "{ a() }", matches(1)},
+		{"{ $x }", "{ a(); b() }", noMatch},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
@@ -130,15 +134,17 @@ func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 		} else if got := err.Error(); got != string(want) {
 			terr("wanted error %q, got %q", got, want)
 		}
-	case bool:
+	case matches:
 		if err != nil {
 			terr("unexpected error: %v", err)
 			return
 		}
-		if match && !want {
+		if match && want == 0 {
 			terr("got unexpected match")
-		} else if !match && want {
+		} else if !match && want > 0 {
 			terr("wanted match, got none")
 		}
+	default:
+		panic(fmt.Sprintf("unexpected anyWant type: %T", anyWant))
 	}
 }

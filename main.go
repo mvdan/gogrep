@@ -25,10 +25,10 @@ func main() {
 	fmt.Println(match)
 }
 
-func grep(expr string, src string) (bool, error) {
+func grep(expr string, src string) (int, error) {
 	toks, err := tokenize(expr)
 	if err != nil {
-		return false, fmt.Errorf("cannot tokenize expr: %v", err)
+		return 0, fmt.Errorf("cannot tokenize expr: %v", err)
 	}
 	var buf bytes.Buffer
 	for _, t := range toks {
@@ -45,15 +45,28 @@ func grep(expr string, src string) (bool, error) {
 		buf.WriteByte(' ') // for e.g. consecutive idents
 	}
 	// trailing newlines can cause issues with commas
-	exprSrc := strings.TrimSpace(buf.String())
-	astExpr, err := parse(exprSrc)
+	exprStr := strings.TrimSpace(buf.String())
+	exprNode, err := parse(exprStr)
 	if err != nil {
-		return false, fmt.Errorf("cannot parse expr: %v", err)
+		return 0, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	astSrc, err := parse(src)
+	srcNode, err := parse(src)
 	if err != nil {
-		return false, fmt.Errorf("cannot parse src: %v", err)
+		return 0, fmt.Errorf("cannot parse src: %v", err)
 	}
-	m := matcher{values: map[string]ast.Node{}}
-	return m.node(astExpr, astSrc), nil
+	matches := 0
+	match := func(srcNode ast.Node) {
+		m := matcher{values: map[string]ast.Node{}}
+		if m.node(exprNode, srcNode) {
+			matches++
+		}
+	}
+	ast.Inspect(srcNode, func(srcNode ast.Node) bool {
+		match(srcNode)
+		for _, list := range exprLists(srcNode) {
+			match(list)
+		}
+		return true
+	})
+	return matches, nil
 }

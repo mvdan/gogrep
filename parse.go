@@ -53,6 +53,11 @@ func noBadNodes(node ast.Node) bool {
 	return !any
 }
 
+type exprList []ast.Expr
+
+func (l exprList) Pos() token.Pos { return l[0].Pos() }
+func (l exprList) End() token.Pos { return l[len(l)-1].End() }
+
 func parse(src string) (ast.Node, error) {
 	fset := token.NewFileSet()
 	var mainErr error
@@ -60,8 +65,12 @@ func parse(src string) (ast.Node, error) {
 	// try as expressions first
 	asExprs := execTmpl(tmplExprs, src)
 	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil {
-		if n := f.Decls[0].(*ast.GenDecl).Specs[0]; noBadNodes(n) {
-			return n, nil
+		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+		if cl := vs.Values[0].(*ast.CompositeLit); noBadNodes(cl) {
+			if len(cl.Elts) == 1 {
+				return cl.Elts[0], nil
+			}
+			return exprList(cl.Elts), nil
 		}
 	}
 
@@ -83,4 +92,24 @@ func parse(src string) (ast.Node, error) {
 		return f.Decls[0].(*ast.GenDecl).Specs[0], nil
 	}
 	return nil, mainErr
+}
+
+func exprLists(n ast.Node) []exprList {
+	var lists []exprList
+	switch x := n.(type) {
+	case *ast.CompositeLit:
+		lists = append(lists, x.Elts)
+	case *ast.CallExpr:
+		lists = append(lists, x.Args)
+	case *ast.AssignStmt:
+		lists = append(lists, x.Lhs)
+		lists = append(lists, x.Rhs)
+	case *ast.ReturnStmt:
+		lists = append(lists, x.Results)
+	case *ast.CaseClause:
+		lists = append(lists, x.List)
+	case *ast.ValueSpec:
+		lists = append(lists, x.Values)
+	}
+	return lists
 }

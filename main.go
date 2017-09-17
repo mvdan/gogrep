@@ -11,6 +11,7 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"regexp"
 	"strings"
 
 	"golang.org/x/tools/go/loader"
@@ -62,8 +63,29 @@ func grepArgs(expr string, args []string) error {
 	return nil
 }
 
+type bufferJoinLines struct {
+	bytes.Buffer
+	last string
+}
+
+var rxNeedSemicolon = regexp.MustCompile(`([])}a-zA-Z0-9"'` + "`" + `]|\+\+|--)$`)
+
+func (b *bufferJoinLines) Write(p []byte) (n int, err error) {
+	if string(p) == "\n" {
+		if rxNeedSemicolon.MatchString(b.last) {
+			b.Buffer.WriteByte(';')
+		}
+		b.Buffer.WriteByte(' ')
+		return 1, nil
+	}
+	p = bytes.Trim(p, "\t")
+	n, err = b.Buffer.Write(p)
+	b.last = string(p)
+	return
+}
+
 func singleLinePrint(node ast.Node) string {
-	var buf bytes.Buffer
+	var buf bufferJoinLines
 	printer.Fprint(&buf, token.NewFileSet(), node)
 	return buf.String()
 }

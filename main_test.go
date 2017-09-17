@@ -10,20 +10,30 @@ func TestGrep(t *testing.T) {
 		expr, src string
 		wantMatch bool
 	}{
+		// basic lits
 		{"123", "123", true},
 		{"false", "true", false},
 
+		// composite lits
 		{"[]float64{$x}", "[]float64{3}", true},
+		{"[2]bool{$x, 0}", "[2]bool{3, 1}", false},
 		{"someStruct{fld: $x}", "someStruct{fld: a, fld2: b}", false},
+		{"map[int]int{1: $x}", "map[int]int{1: a}", true},
 
+		// more types
+		{"struct{field $t}", "struct{field int}", true},
+
+		// unary ops
 		{"-someConst", "- someConst", true},
 		{"*someVar", "* someVar", true},
 
+		// binary ops
 		{"$x == $y", "a == b", true},
 		{"$x == $y", "123", false},
 		{"$x == $y", "a != b", false},
 		{"$x - $x", "a - b", false},
 
+		// calls
 		{"someFunc($x)", "someFunc(a > b)", true},
 	}
 	for _, tc := range tests {

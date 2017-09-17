@@ -79,6 +79,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		}
 		return m.node(prev, node)
 
+	// lits
 	case *ast.BasicLit:
 		// TODO: also try with resolved constants?
 		y, ok := node.(*ast.BasicLit)
@@ -87,10 +88,22 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.CompositeLit)
 		return ok && m.node(x.Type, y.Type) && m.exprs(x.Elts, y.Elts)
 
+	// types
 	case *ast.ArrayType:
 		y, ok := node.(*ast.ArrayType)
 		return ok && m.node(x.Len, y.Len) && m.node(x.Elt, y.Elt)
+	case *ast.MapType:
+		y, ok := node.(*ast.MapType)
+		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value)
+	case *ast.StructType:
+		y, ok := node.(*ast.StructType)
+		return ok && m.fields(x.Fields, y.Fields)
+	case *ast.Field:
+		// TODO: tags?
+		y, ok := node.(*ast.Field)
+		return ok && m.idents(x.Names, y.Names) && m.node(x.Type, y.Type)
 
+	// other exprs
 	case *ast.UnaryExpr:
 		y, ok := node.(*ast.UnaryExpr)
 		return ok && x.Op == y.Op && m.node(x.X, y.X)
@@ -118,6 +131,30 @@ func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
 	}
 	for i, e1 := range exprs1 {
 		if !m.node(e1, exprs2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
+	if len(ids1) != len(ids2) {
+		return false
+	}
+	for i, id1 := range ids1 {
+		if !m.node(id1, ids2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
+	if len(fields1.List) != len(fields2.List) {
+		return false
+	}
+	for i, f1 := range fields1.List {
+		if !m.node(f1, fields2.List[i]) {
 			return false
 		}
 	}

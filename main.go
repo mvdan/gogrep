@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"log"
 )
 
@@ -28,7 +27,7 @@ func main() {
 func grep(expr string, src string) (bool, error) {
 	toks, err := tokenize(expr)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("cannot tokenize expr: %v", err)
 	}
 	var buf bytes.Buffer
 	for _, t := range toks {
@@ -44,13 +43,13 @@ func grep(expr string, src string) (bool, error) {
 		buf.WriteString(s)
 		buf.WriteByte(' ') // for e.g. consecutive idents
 	}
-	astExpr, err := parser.ParseExpr(buf.String())
+	astExpr, err := parse(buf.String())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	astSrc, err := parser.ParseExpr(src)
+	astSrc, err := parse(src)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("cannot parse src: %v", err)
 	}
 	m := matcher{values: map[string]ast.Node{}}
 	return m.node(astExpr, astSrc), nil

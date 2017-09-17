@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
-	"go/scanner"
-	"go/token"
 	"log"
 	"strings"
 )
@@ -42,7 +40,7 @@ func grep(expr string, src string) (bool, error) {
 		case t.lit != "":
 			s = t.lit
 		default:
-			buf.WriteString(token.Token(t.tok).String())
+			buf.WriteString(t.tok.String())
 		}
 		buf.WriteString(s)
 		buf.WriteByte(' ') // for e.g. consecutive idents
@@ -59,7 +57,7 @@ func grep(expr string, src string) (bool, error) {
 	return m.node(astExpr, astSrc), nil
 }
 
-type matcher struct{
+type matcher struct {
 	values map[string]ast.Node
 }
 
@@ -139,58 +137,4 @@ func isWildName(name string) bool {
 
 func fromWildName(name string) string {
 	return strings.TrimPrefix(name, wildPrefix)
-}
-
-// exprToken exists to add extra possible tokens on top of the ones
-// recognized by vanilla Go.
-type exprToken token.Token
-
-const (
-	_ exprToken = -iota
-	tokWildcard
-)
-
-type fullToken struct {
-	tok exprToken
-	lit string
-}
-
-func tokenize(src string) ([]fullToken, error) {
-	var s scanner.Scanner
-	fset := token.NewFileSet()
-	file := fset.AddFile("", fset.Base(), len(src))
-
-	var err error
-	onError := func(pos token.Position, msg string) {
-		switch msg { // allow some extra chars
-		case `illegal character U+0024 '$'`:
-		default:
-			err = fmt.Errorf("%v: %s", pos, msg)
-		}
-	}
-	s.Init(file, []byte(src), onError, scanner.ScanComments)
-
-	var toks []fullToken
-	gotDollar := false
-	for {
-		pos, tok, lit := s.Scan()
-		if tok == token.EOF || err != nil {
-			break
-		}
-		fpos := fset.Position(pos)
-		if gotDollar {
-			if tok != token.IDENT {
-				err = fmt.Errorf("%v: $ must be followed by ident, got %v",
-					fpos, tok)
-				break
-			}
-			gotDollar = false
-			toks = append(toks, fullToken{tokWildcard, lit})
-		} else if tok == token.ILLEGAL && lit == "$" {
-			gotDollar = true
-		} else {
-			toks = append(toks, fullToken{exprToken(tok), lit})
-		}
-	}
-	return toks, err
 }

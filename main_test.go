@@ -44,6 +44,10 @@ func TestGrep(t *testing.T) {
 		{"<-chan $x", "chan bool", false},
 		{"chan $x", "chan<- bool", false},
 
+		// many types
+		{"chan $x, interface{}", "chan int, interface{}", true},
+		{"chan $x, interface{}", "chan int", false},
+
 		// parens
 		{"($x)", "(a + b)", true},
 		{"($x)", "a + b", false},

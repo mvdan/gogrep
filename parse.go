@@ -11,29 +11,44 @@ import (
 	"text/template"
 )
 
-var fileTempl = template.Must(template.New("stmts").Parse(`
+var tmplExprs = template.Must(template.New("exprs").Parse(`
+package _gogrep
+
+var _gogrep = []interface{}{
+	{{ . }},
+}`))
+
+var tmplStmts = template.Must(template.New("stmts").Parse(`
 package _gogrep
 
 func _gogrep() {
-	{{ . }}
+       {{ . }}
 }`))
 
-func asFile(src string) string {
+func execTmpl(tmpl *template.Template, src string) string {
 	var buf bytes.Buffer
-	if err := fileTempl.Execute(&buf, src); err != nil {
+	if err := tmpl.Execute(&buf, src); err != nil {
 		panic(err)
 	}
 	return buf.String()
 }
 
 func parse(src string) (ast.Node, error) {
-	// try as an expr first, as our template method breaks when
-	// given only types
+	// TODO: remove this once we can do any number of types with a file
 	if expr, err := parser.ParseExpr(src); err == nil {
 		return expr, nil
 	}
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, "", asFile(src), 0)
+
+	// try as an expr first, as our template method breaks when
+	// given only types
+	asExprs := execTmpl(tmplExprs, src)
+	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil {
+		return f.Decls[0].(*ast.GenDecl).Specs[0], nil
+	}
+
+	asStmts := execTmpl(tmplStmts, src)
+	f, err := parser.ParseFile(fset, "", asStmts, 0)
 	if err != nil {
 		return nil, err
 	}

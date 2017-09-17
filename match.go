@@ -113,6 +113,12 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.TypeAssertExpr)
 		return ok && m.node(x.X, y.X) && m.node(x.Type, y.Type)
 
+	// specs
+	case *ast.ValueSpec:
+		y, ok := node.(*ast.ValueSpec)
+		return ok && m.idents(x.Names, y.Names) &&
+			m.node(x.Type, y.Type) && m.exprs(x.Values, y.Values)
+
 	// stmts
 	case *ast.BadStmt:
 		y, ok := node.(*ast.BadStmt)

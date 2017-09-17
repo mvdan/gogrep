@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/ast"
 	"log"
+	"strings"
 )
 
 func main() {
@@ -43,7 +44,9 @@ func grep(expr string, src string) (bool, error) {
 		buf.WriteString(s)
 		buf.WriteByte(' ') // for e.g. consecutive idents
 	}
-	astExpr, err := parse(buf.String())
+	// trailing newlines can cause issues with commas
+	exprSrc := strings.TrimSpace(buf.String())
+	astExpr, err := parse(exprSrc)
 	if err != nil {
 		return false, fmt.Errorf("cannot parse expr: %v", err)
 	}

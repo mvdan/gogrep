@@ -3,7 +3,10 @@
 
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestGrep(t *testing.T) {
 	tests := []struct {
@@ -20,8 +23,9 @@ func TestGrep(t *testing.T) {
 		{"foo($_, $_)", "foo(1, 2)", true},
 		{"foo($x, $y, $y)", "foo(1, 2, 2)", true},
 
-		// many expressions (TODO)
-		// {"$x, $y", "1, 2", true},
+		// many expressions
+		{"$x, $y", "1, 2", true},
+		{"$x, $y", "1", false},
 
 		// composite lits
 		{"[]float64{$x}", "[]float64{3}", true},
@@ -86,16 +90,22 @@ func TestGrep(t *testing.T) {
 		{"{ $x }", "{ a() }", true},
 		{"{ $x }", "{ a(); b() }", false},
 	}
-	for _, tc := range tests {
-		match, err := grep(tc.expr, tc.src)
-		if err != nil {
-			t.Errorf("%s | %s: unexpected error: %v", tc.expr, tc.src, err)
-			continue
-		}
-		if match && !tc.wantMatch {
-			t.Errorf("%s | %s: got unexpected match", tc.expr, tc.src)
-		} else if !match && tc.wantMatch {
-			t.Errorf("%s | %s: wanted match, got none", tc.expr, tc.src)
-		}
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
+			grepTest(t, tc.expr, tc.src, tc.wantMatch)
+		})
+	}
+}
+
+func grepTest(t *testing.T, expr, src string, wantMatch bool) {
+	match, err := grep(expr, src)
+	if err != nil {
+		t.Errorf("%s | %s: unexpected error: %v", expr, src, err)
+		return
+	}
+	if match && !wantMatch {
+		t.Errorf("%s | %s: got unexpected match", expr, src)
+	} else if !match && wantMatch {
+		t.Errorf("%s | %s: wanted match, got none", expr, src)
 	}
 }

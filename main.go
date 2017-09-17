@@ -20,10 +20,20 @@ import (
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprint(os.Stderr, `usage: gogrep pattern [pkg ...]
+
+A pattern is a Go expression or statement which may include wildcards.
+
+Example:
+
+	gogrep 'if $x != nil { return $x }'
+`)
+	}
 	flag.Parse()
 	args := flag.Args()
-	if len(args) < 2 {
-		fmt.Fprintln(os.Stderr, "need at least two args")
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "need at least one arg")
 		os.Exit(2)
 	}
 	if err := grepArgs(args[0], args[1:]); err != nil {

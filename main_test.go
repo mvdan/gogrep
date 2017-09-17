@@ -60,6 +60,8 @@ func TestGrep(t *testing.T) {
 
 		// more types
 		{"struct{field $t}", "struct{field int}", matches(1)},
+		{"struct{field $t}", "struct{other int}", noMatch},
+		{"struct{field $t}", "struct{f1, f2 int}", noMatch},
 		{"interface{$x() int}", "interface{i() int}", matches(1)},
 		{"chan $x", "chan bool", matches(1)},
 		{"<-chan $x", "chan bool", noMatch},
@@ -108,7 +110,7 @@ func TestGrep(t *testing.T) {
 		{"foo($x...)", "foo(a, b)", noMatch},
 
 		// many statements
-		{"$x(); $y()", "a(); b(); c()", matches(1)},
+		{"$x(); $y()", "a(); b()", matches(1)},
 		{"$x(); $y()", "a()", noMatch},
 
 		// block

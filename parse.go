@@ -68,7 +68,7 @@ func parse(src string) (ast.Node, error) {
 	// then try as statements
 	asStmts := execTmpl(tmplStmts, src)
 	if f, err := parser.ParseFile(fset, "", asStmts, 0); err == nil {
-		if n := f.Decls[0].(*ast.FuncDecl).Body.List[0]; noBadNodes(n) {
+		if n := f.Decls[0].(*ast.FuncDecl).Body; noBadNodes(n) {
 			return n, nil
 		}
 	} else {

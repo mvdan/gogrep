@@ -8,27 +8,70 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
-	"log"
+	"go/printer"
+	"go/token"
+	"os"
 	"strings"
+
+	"golang.org/x/tools/go/loader"
 )
 
 func main() {
 	flag.Parse()
 	args := flag.Args()
-	if len(args) != 2 {
-		log.Fatal("needs two args")
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "need at least two args")
+		os.Exit(2)
 	}
-	match, err := grep(args[0], args[1])
-	if err != nil {
-		log.Fatal(err)
+	if err := grepArgs(args[0], args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	fmt.Println(match)
 }
 
-func grep(expr string, src string) (int, error) {
+func grepArgs(expr string, args []string) error {
+	exprNode, err := compileExpr(expr)
+	if err != nil {
+		return err
+	}
+	conf := loader.Config{
+		TypeCheckFuncBodies: func(path string) bool {
+			return false
+		},
+	}
+	if _, err := conf.FromArgs(args, true); err != nil {
+		return err
+	}
+	prog, err := conf.Load()
+	if err != nil {
+		return err
+	}
+	wd, _ := os.Getwd()
+	for _, pkg := range prog.InitialPackages() {
+		for _, file := range pkg.Files {
+			matches := search(exprNode, file)
+			for _, n := range matches {
+				fpos := conf.Fset.Position(n.Pos())
+				if strings.HasPrefix(fpos.Filename, wd) {
+					fpos.Filename = fpos.Filename[len(wd)+1:]
+				}
+				fmt.Printf("%v: %s\n", fpos, singleLinePrint(n))
+			}
+		}
+	}
+	return nil
+}
+
+func singleLinePrint(node ast.Node) string {
+	var buf bytes.Buffer
+	printer.Fprint(&buf, token.NewFileSet(), node)
+	return buf.String()
+}
+
+func compileExpr(expr string) (ast.Node, error) {
 	toks, err := tokenize(expr)
 	if err != nil {
-		return 0, fmt.Errorf("cannot tokenize expr: %v", err)
+		return nil, fmt.Errorf("cannot parse expr: %v", err)
 	}
 	var buf bytes.Buffer
 	for _, t := range toks {
@@ -46,27 +89,27 @@ func grep(expr string, src string) (int, error) {
 	}
 	// trailing newlines can cause issues with commas
 	exprStr := strings.TrimSpace(buf.String())
-	exprNode, err := parse(exprStr)
+	node, err := parse(exprStr)
 	if err != nil {
-		return 0, fmt.Errorf("cannot parse expr: %v", err)
+		return nil, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	srcNode, err := parse(src)
-	if err != nil {
-		return 0, fmt.Errorf("cannot parse src: %v", err)
-	}
-	matches := 0
-	match := func(srcNode ast.Node) {
+	return node, nil
+}
+
+func search(exprNode, node ast.Node) []ast.Node {
+	var matches []ast.Node
+	match := func(node ast.Node) {
 		m := matcher{values: map[string]ast.Node{}}
-		if m.node(exprNode, srcNode) {
-			matches++
+		if m.node(exprNode, node) {
+			matches = append(matches, node)
 		}
 	}
-	ast.Inspect(srcNode, func(srcNode ast.Node) bool {
-		match(srcNode)
-		for _, list := range exprLists(srcNode) {
+	ast.Inspect(node, func(node ast.Node) bool {
+		match(node)
+		for _, list := range exprLists(node) {
 			match(list)
 		}
 		return true
 	})
-	return matches, nil
+	return matches
 }

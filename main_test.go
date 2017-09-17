@@ -5,14 +5,11 @@ package main
 
 import (
 	"fmt"
+	"go/ast"
 	"testing"
 )
 
 type wantErr string
-
-func tokErr(msg string) wantErr {
-	return wantErr("cannot tokenize expr: " + msg)
-}
 
 func parseErr(msg string) wantErr {
 	return wantErr("cannot parse expr: " + msg)
@@ -24,8 +21,8 @@ func TestGrep(t *testing.T) {
 		anyWant   interface{}
 	}{
 		// expr tokenize errors
-		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
-		{`"`, "", tokErr("1:1: string literal not terminated")},
+		{"$", "", parseErr("1:2: $ must be followed by ident, got EOF")},
+		{`"`, "", parseErr("1:1: string literal not terminated")},
 
 		// expr parse errors
 		{"{", "", parseErr("6:2: expected '}', found 'EOF'")},
@@ -129,6 +126,7 @@ func TestGrep(t *testing.T) {
 		// if stmts
 		{"if $x != nil { $y }", "if p != nil { p.foo() }", 1},
 		{"if $x { $y }", "if a { b() } else { c() }", 0},
+		{"if $x { $y }", "{ if a { b() } }", 1},
 
 		// returns
 		{"return nil, $x", "{ return nil, err }", 1},
@@ -151,11 +149,23 @@ func TestGrep(t *testing.T) {
 	}
 }
 
+func grepStrs(expr, src string) ([]ast.Node, error) {
+	exprNode, err := compileExpr(expr)
+	if err != nil {
+		return nil, err
+	}
+	srcNode, err := parse(src)
+	if err != nil {
+		return nil, err
+	}
+	return search(exprNode, srcNode), nil
+}
+
 func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 	terr := func(format string, a ...interface{}) {
 		t.Errorf("%s | %s: %s", expr, src, fmt.Sprintf(format, a...))
 	}
-	gotCount, err := grep(expr, src)
+	matches, err := grepStrs(expr, src)
 	switch want := anyWant.(type) {
 	case wantErr:
 		if err == nil {
@@ -168,8 +178,8 @@ func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 			terr("unexpected error: %v", err)
 			return
 		}
-		if gotCount != want {
-			terr("wanted %d matches, got %d", want, gotCount)
+		if len(matches) != want {
+			terr("wanted %d matches, got %d", want, len(matches))
 		}
 	default:
 		panic(fmt.Sprintf("unexpected anyWant type: %T", anyWant))

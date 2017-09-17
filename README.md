@@ -11,3 +11,8 @@ preceded by `$`.
 	$ gogrep 'if $x != nil { return $x }'
 	main.go:37:2: if err != nil { return err; }
 	main.go:50:2: if err != nil { return err; }
+
+All wildcards with the same name must match the same syntax node. In
+other words, they must be equal in the source code. The `$_` wildcard
+doesn't follow this rule, so it can be used to match anything regardless
+of how often it is used.

@@ -20,6 +20,9 @@ func TestGrep(t *testing.T) {
 		{"foo($_, $_)", "foo(1, 2)", true},
 		{"foo($x, $y, $y)", "foo(1, 2, 2)", true},
 
+		// many expressions (TODO)
+		// {"$x, $y", "1, 2", true},
+
 		// composite lits
 		{"[]float64{$x}", "[]float64{3}", true},
 		{"[2]bool{$x, 0}", "[2]bool{3, 1}", false},
@@ -74,11 +77,19 @@ func TestGrep(t *testing.T) {
 		{"append($x, $y...)", "append(a, bs...)", true},
 		{"foo($x...)", "foo(a)", false},
 		{"foo($x...)", "foo(a, b)", false},
+
+		// many statements
+		{"$x(); $y()", "a(); b(); c()", true},
+		{"$x(); $y()", "a()", false},
+
+		// block
+		{"{ $x }", "{ a() }", true},
+		{"{ $x }", "{ a(); b() }", false},
 	}
 	for _, tc := range tests {
 		match, err := grep(tc.expr, tc.src)
 		if err != nil {
-			t.Errorf("unexpected error: %v", err)
+			t.Errorf("%s | %s: unexpected error: %v", tc.expr, tc.src, err)
 			continue
 		}
 		if match && !tc.wantMatch {

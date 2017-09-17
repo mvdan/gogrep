@@ -126,7 +126,7 @@ func TestGrep(t *testing.T) {
 		// if stmts
 		{"if $x != nil { $y }", "if p != nil { p.foo() }", 1},
 		{"if $x { $y }", "if a { b() } else { c() }", 0},
-		{"if $x { $y }", "{ if a { b() } }", 1},
+		{"if $x != nil { $y }", "if a != nil { return a }", 1},
 
 		// returns
 		{"return nil, $x", "{ return nil, err }", 1},

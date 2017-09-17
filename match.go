@@ -128,6 +128,14 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			m.node(x.Type, y.Type) && m.exprs(x.Values, y.Values)
 
 	// stmts
+	case *ast.ExprStmt:
+		if id, ok := x.X.(*ast.Ident); ok && isWildName(id.Name) {
+			// prefer matching $x as a statement, as it's
+			// the parent
+			return m.node(id, node)
+		}
+		y, ok := node.(*ast.ExprStmt)
+		return ok && m.node(x.X, y.X)
 	case *ast.DeclStmt:
 		y, ok := node.(*ast.DeclStmt)
 		_, _ = y, ok
@@ -137,9 +145,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.LabeledStmt:
 		y, ok := node.(*ast.LabeledStmt)
 		_, _ = y, ok
-	case *ast.ExprStmt:
-		y, ok := node.(*ast.ExprStmt)
-		return ok && m.node(x.X, y.X)
 	case *ast.SendStmt:
 		y, ok := node.(*ast.SendStmt)
 		_, _ = y, ok

@@ -42,6 +42,7 @@ func TestGrep(t *testing.T) {
 
 		// recursion
 		{"$x", "a + b", 3},
+		{"$x + $x", "foo(a + a, b + b)", 2},
 
 		// many expressions
 		{"$x, $y", "foo(1, 2)", 1},
@@ -92,7 +93,7 @@ func TestGrep(t *testing.T) {
 		{"$x.Field", "a.field", 0},
 		{"$x.Method()", "a.Method()", 1},
 
-		// index
+		// indexes
 		{"$x[len($x)-1]", "a[len(a)-1]", 1},
 		{"$x[len($x)-1]", "a[len(b)-1]", 0},
 
@@ -112,9 +113,31 @@ func TestGrep(t *testing.T) {
 		{"$x(); $y()", "a(); b()", 1},
 		{"$x(); $y()", "a()", 0},
 
-		// block
+		// blocks
 		{"{ $x }", "{ a() }", 1},
 		{"{ $x }", "{ a(); b() }", 0},
+
+		// assigns
+		{"$x = $y", "a = b", 1},
+		{"$x := $y", "a, b := c()", 0},
+
+		// if stmts
+		{"if $x != nil { $y }", "if p != nil { p.foo() }", 1},
+		{"if $x { $y }", "if a { b() } else { c() }", 0},
+
+		// returns
+		{"return nil, $x", "{ return nil, err }", 1},
+		{"return nil, $x", "{ return nil, 0, err }", 0},
+
+		// go stmts
+		{"go $x()", "go func() { a() }()", 1},
+		{"go func() { $x }()", "go func() { a() }()", 1},
+		{"go func() { $x }()", "go a()", 0},
+
+		// defer stmts
+		{"defer $x()", "defer func() { a() }()", 1},
+		{"defer func() { $x }()", "defer func() { a() }()", 1},
+		{"defer func() { $x }()", "defer a()", 0},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {

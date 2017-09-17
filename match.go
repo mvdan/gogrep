@@ -125,9 +125,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			m.node(x.Type, y.Type) && m.exprs(x.Values, y.Values)
 
 	// stmts
-	case *ast.BadStmt:
-		y, ok := node.(*ast.BadStmt)
-		_, _ = y, ok
 	case *ast.DeclStmt:
 		y, ok := node.(*ast.DeclStmt)
 		_, _ = y, ok
@@ -148,16 +145,17 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		_, _ = y, ok
 	case *ast.AssignStmt:
 		y, ok := node.(*ast.AssignStmt)
-		_, _ = y, ok
+		return ok && x.Tok == y.Tok && m.exprs(x.Lhs, y.Lhs) &&
+			m.exprs(x.Rhs, y.Rhs)
 	case *ast.GoStmt:
 		y, ok := node.(*ast.GoStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Call, y.Call)
 	case *ast.DeferStmt:
 		y, ok := node.(*ast.DeferStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Call, y.Call)
 	case *ast.ReturnStmt:
 		y, ok := node.(*ast.ReturnStmt)
-		_, _ = y, ok
+		return ok && m.exprs(x.Results, y.Results)
 	case *ast.BranchStmt:
 		y, ok := node.(*ast.BranchStmt)
 		_, _ = y, ok
@@ -166,7 +164,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && m.stmts(x.List, y.List)
 	case *ast.IfStmt:
 		y, ok := node.(*ast.IfStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 	case *ast.CaseClause:
 		y, ok := node.(*ast.CaseClause)
 		_, _ = y, ok

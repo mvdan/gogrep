@@ -43,7 +43,7 @@ func TestGrep(t *testing.T) {
 		// recursion
 		{"$x", "a + b", 3},
 		{"$x + $x", "foo(a + a, b + b)", 2},
-		{"$x", "var a int", 3},
+		{"$x", "var a int", 6},
 		{"go foo()", "a(); go foo(); a()", 1},
 
 		// many value expressions

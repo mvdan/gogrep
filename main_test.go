@@ -8,11 +8,28 @@ import (
 	"testing"
 )
 
+type wantErr string
+
+func tokErr(msg string) wantErr {
+	return wantErr("cannot tokenize expr: "+msg)
+}
+
+func parseErr(msg string) wantErr {
+	return wantErr("cannot parse expr: "+msg)
+}
+
 func TestGrep(t *testing.T) {
 	tests := []struct {
 		expr, src string
-		wantMatch bool
+		anyWant   interface{}
 	}{
+		// expr tokenize errors
+		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
+		{`"`, "", tokErr("1:1: string literal not terminated")},
+
+		// expr parse errors
+		{"{", "", parseErr("6:2: expected '}', found 'EOF'")},
+
 		// basic lits
 		{"123", "123", true},
 		{"false", "true", false},
@@ -96,20 +113,32 @@ func TestGrep(t *testing.T) {
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
-			grepTest(t, tc.expr, tc.src, tc.wantMatch)
+			grepTest(t, tc.expr, tc.src, tc.anyWant)
 		})
 	}
 }
 
-func grepTest(t *testing.T, expr, src string, wantMatch bool) {
-	match, err := grep(expr, src)
-	if err != nil {
-		t.Errorf("%s | %s: unexpected error: %v", expr, src, err)
-		return
+func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
+	terr := func(format string, a ...interface{}) {
+		t.Errorf("%s | %s: %s", expr, src, fmt.Sprintf(format, a...))
 	}
-	if match && !wantMatch {
-		t.Errorf("%s | %s: got unexpected match", expr, src)
-	} else if !match && wantMatch {
-		t.Errorf("%s | %s: wanted match, got none", expr, src)
+	match, err := grep(expr, src)
+	switch want := anyWant.(type) {
+	case wantErr:
+		if err == nil {
+			terr("wanted error %q, got none", want)
+		} else if got := err.Error(); got != string(want) {
+			terr("wanted error %q, got %q", got, want)
+		}
+	case bool:
+		if err != nil {
+			terr("unexpected error: %v", err)
+			return
+		}
+		if match && !want {
+			terr("got unexpected match")
+		} else if !match && want {
+			terr("wanted match, got none")
+		}
 	}
 }

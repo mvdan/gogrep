@@ -38,9 +38,6 @@ func tokenize(src string) ([]fullToken, error) {
 	gotDollar := false
 	for {
 		pos, tok, lit := s.Scan()
-		if tok == token.EOF || err != nil {
-			break
-		}
 		fpos := fset.Position(pos)
 		if gotDollar {
 			if tok != token.IDENT {
@@ -50,7 +47,12 @@ func tokenize(src string) ([]fullToken, error) {
 			}
 			gotDollar = false
 			toks = append(toks, fullToken{tokWildcard, lit})
-		} else if tok == token.ILLEGAL && lit == "$" {
+			continue
+		}
+		if tok == token.EOF || err != nil {
+			break
+		}
+		if tok == token.ILLEGAL && lit == "$" {
 			gotDollar = true
 		} else {
 			toks = append(toks, fullToken{tok, lit})

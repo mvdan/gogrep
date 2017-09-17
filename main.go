@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/loader"
+
+	"github.com/kisielk/gotool"
 )
 
 func main() {
@@ -35,12 +37,13 @@ func grepArgs(expr string, args []string) error {
 	if err != nil {
 		return err
 	}
+	paths := gotool.ImportPaths(args)
 	conf := loader.Config{
 		TypeCheckFuncBodies: func(path string) bool {
 			return false
 		},
 	}
-	if _, err := conf.FromArgs(args, true); err != nil {
+	if _, err := conf.FromArgs(paths, true); err != nil {
 		return err
 	}
 	prog, err := conf.Load()

@@ -62,7 +62,7 @@ func parse(src string) (ast.Node, error) {
 	fset := token.NewFileSet()
 	var mainErr error
 
-	// try as expressions first
+	// try as value expressions first
 	asExprs := execTmpl(tmplExprs, src)
 	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
@@ -77,8 +77,11 @@ func parse(src string) (ast.Node, error) {
 	// then try as statements
 	asStmts := execTmpl(tmplStmts, src)
 	if f, err := parser.ParseFile(fset, "", asStmts, 0); err == nil {
-		if n := f.Decls[0].(*ast.FuncDecl).Body; noBadNodes(n) {
-			return n, nil
+		if bl := f.Decls[0].(*ast.FuncDecl).Body; noBadNodes(bl) {
+			if len(bl.List) == 1 {
+				return bl.List[0], nil
+			}
+			return bl, nil
 		}
 	} else {
 		// statements is what covers most cases, so it will give
@@ -86,7 +89,7 @@ func parse(src string) (ast.Node, error) {
 		mainErr = err
 	}
 
-	// type as a last resort, for e.g. chans and interfaces
+	// type expressions as a last resort, for e.g. chans and interfaces
 	asType := execTmpl(tmplType, src)
 	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)

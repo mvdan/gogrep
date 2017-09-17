@@ -25,6 +25,13 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			y, ok := node.(*ast.Ident)
 			return ok && x.Name == y.Name
 		}
+		switch node.(type) {
+		case ast.Stmt, ast.Expr:
+		default:
+			// we don't want to count matches with other
+			// nodes like ast.Spec.
+			return false
+		}
 		name := fromWildName(x.Name)
 		if name == "_" {
 			// values are discarded, matches anything

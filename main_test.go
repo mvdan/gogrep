@@ -43,8 +43,10 @@ func TestGrep(t *testing.T) {
 		// recursion
 		{"$x", "a + b", 3},
 		{"$x + $x", "foo(a + a, b + b)", 2},
+		{"$x", "var a int", 3},
+		{"go foo()", "a(); go foo(); a()", 1},
 
-		// many expressions
+		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},
 		{"$x, $y", "1", 0},
 
@@ -58,7 +60,9 @@ func TestGrep(t *testing.T) {
 		{"func($s string) { print($s) }", "func(a string) { print(a) }", 1},
 		{"func($x ...$t) {}", "func(a ...int) {}", 1},
 
-		// more types
+		// type exprs
+		{"[8]$x", "[8]int", 1},
+		{"struct{field $t}", "struct{field int}", 1},
 		{"struct{field $t}", "struct{field int}", 1},
 		{"struct{field $t}", "struct{other int}", 0},
 		{"struct{field $t}", "struct{f1, f2 int}", 0},

@@ -22,10 +22,14 @@ func TestGrep(t *testing.T) {
 
 		// func lits
 		{"func($s string) { print($s) }", "func(a string) { print(a) }", true},
+		{"func($x ...$t) {}", "func(a ...int) {}", true},
 
 		// more types
 		{"struct{field $t}", "struct{field int}", true},
-		{"$x.(string)", "a.(string)", true},
+		{"interface{$x() int}", "interface{i() int}", true},
+		{"chan $x", "chan bool", true},
+		{"<-chan $x", "chan bool", false},
+		{"chan $x", "chan<- bool", false},
 
 		// parens
 		{"($x)", "(a + b)", true},
@@ -57,8 +61,12 @@ func TestGrep(t *testing.T) {
 		{"$x[:$y]", "a[:1]", true},
 		{"$x[3:]", "a[3:5:5]", false},
 
+		// type asserts
+		{"$x.(string)", "a.(string)", true},
+
 		// elipsis
 		{"append($x, $y...)", "append(a, bs...)", true},
+		{"foo($x...)", "foo(a)", false},
 		{"foo($x...)", "foo(a, b)", false},
 	}
 	for _, tc := range tests {

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/token"
 	"log"
 	"strings"
 )
@@ -112,8 +113,17 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.FuncType)
 		return ok && m.fields(x.Params, y.Params) &&
 			m.fields(x.Results, y.Results)
+	case *ast.InterfaceType:
+		y, ok := node.(*ast.InterfaceType)
+		return ok && m.fields(x.Methods, y.Methods)
+	case *ast.ChanType:
+		y, ok := node.(*ast.ChanType)
+		return ok && x.Dir == y.Dir && m.node(x.Value, y.Value)
 
 	// other exprs
+	case *ast.Ellipsis:
+		y, ok := node.(*ast.Ellipsis)
+		return ok && m.node(x.Elt, y.Elt)
 	case *ast.ParenExpr:
 		y, ok := node.(*ast.ParenExpr)
 		return ok && m.node(x.X, y.X)
@@ -125,7 +135,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && x.Op == y.Op && m.node(x.X, y.X) && m.node(x.Y, y.Y)
 	case *ast.CallExpr:
 		y, ok := node.(*ast.CallExpr)
-		return ok && m.node(x.Fun, y.Fun) && m.exprs(x.Args, y.Args)
+		return ok && m.node(x.Fun, y.Fun) && m.exprs(x.Args, y.Args) &&
+			m.noPos(x.Ellipsis, y.Ellipsis)
 	case *ast.KeyValueExpr:
 		y, ok := node.(*ast.KeyValueExpr)
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value)
@@ -214,7 +225,11 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
-	return false
+	panic(fmt.Sprintf("unfinished node: %T", expr))
+}
+
+func (m *matcher) noPos(p1, p2 token.Pos) bool {
+	return (p1 == token.NoPos) == (p2 == token.NoPos)
 }
 
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {

@@ -68,15 +68,18 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		if !isWildName(x.Name) {
+			// not a wildcard
 			y, ok := node.(*ast.Ident)
 			return ok && x.Name == y.Name
 		}
 		name := fromWildName(x.Name)
 		prev, ok := m.values[name]
 		if !ok {
+			// first occurrence, record value
 			m.values[name] = node
 			return true
 		}
+		// multiple uses must match
 		return m.node(prev, node)
 
 	// lits
@@ -119,6 +122,19 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.StarExpr:
 		y, ok := node.(*ast.StarExpr)
 		return ok && m.node(x.X, y.X)
+	case *ast.SelectorExpr:
+		y, ok := node.(*ast.SelectorExpr)
+		return ok && m.node(x.X, y.X) && m.node(x.Sel, y.Sel)
+	case *ast.IndexExpr:
+		y, ok := node.(*ast.IndexExpr)
+		return ok && m.node(x.X, y.X) && m.node(x.Index, y.Index)
+	case *ast.SliceExpr:
+		y, ok := node.(*ast.SliceExpr)
+		return ok && m.node(x.X, y.X) && m.node(x.Low, y.Low) &&
+			m.node(x.High, y.High) && m.node(x.Max, y.Max)
+	case *ast.TypeAssertExpr:
+		y, ok := node.(*ast.TypeAssertExpr)
+		return ok && m.node(x.X, y.X) && m.node(x.Type, y.Type)
 
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))

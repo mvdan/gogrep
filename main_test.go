@@ -22,6 +22,7 @@ func TestGrep(t *testing.T) {
 
 		// more types
 		{"struct{field $t}", "struct{field int}", true},
+		{"$x.(string)", "a.(string)", true},
 
 		// unary ops
 		{"-someConst", "- someConst", true},
@@ -35,6 +36,19 @@ func TestGrep(t *testing.T) {
 
 		// calls
 		{"someFunc($x)", "someFunc(a > b)", true},
+
+		// selector
+		{"$x.Field", "a.Field", true},
+		{"$x.Field", "a.field", false},
+		{"$x.Method()", "a.Method()", true},
+
+		// index
+		{"$x[len($x)-1]", "a[len(a)-1]", true},
+		{"$x[len($x)-1]", "a[len(b)-1]", false},
+
+		// slicing
+		{"$x[:$y]", "a[:1]", true},
+		{"$x[3:]", "a[3:5:5]", false},
 	}
 	for _, tc := range tests {
 		match, err := grep(tc.expr, tc.src)

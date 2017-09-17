@@ -14,6 +14,12 @@ func TestGrep(t *testing.T) {
 		{"123", "123", true},
 		{"false", "true", false},
 
+		// wildcards
+		{"$x", "rune", true},
+		{"foo($x, $x)", "foo(1, 2)", false},
+		{"foo($_, $_)", "foo(1, 2)", true},
+		{"foo($x, $y, $y)", "foo(1, 2, 2)", true},
+
 		// composite lits
 		{"[]float64{$x}", "[]float64{3}", true},
 		{"[2]bool{$x, 0}", "[2]bool{3, 1}", false},

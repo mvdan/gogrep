@@ -74,6 +74,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return ok && x.Name == y.Name
 		}
 		name := fromWildName(x.Name)
+		if name == "_" {
+			// values are discarded, matches anything
+			return true
+		}
 		prev, ok := m.values[name]
 		if !ok {
 			// first occurrence, record value

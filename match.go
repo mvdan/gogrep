@@ -215,14 +215,20 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 	return (p1 == token.NoPos) == (p2 == token.NoPos)
 }
 
+type nodeList interface {
+	get(i int) ast.Node
+	length() int
+}
+
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
-func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
+func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
-	for i1 < len(ns1) || i2 < len(ns2) {
-		if i1 < len(ns1) {
-			n1 := ns1[i1]
+	ns1len, ns2len := ns1.length(), ns2.length()
+	for i1 < ns1len || i2 < ns2len {
+		if i1 < ns1len {
+			n1 := ns1.get(i1)
 			if _, any := fromWildNode(n1); any {
 				// try to match zero or more at i2,
 				// restarting at i2+1 if it fails
@@ -231,7 +237,7 @@ func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
 				i1++
 				continue
 			}
-			if i2 < len(ns2) && m.node(n1, ns2[i2]) {
+			if i2 < ns2len && m.node(n1, ns2.get(i2)) {
 				// ordinary match
 				i1++
 				i2++
@@ -239,7 +245,7 @@ func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
 			}
 		}
 		// mismatch, try to restart
-		if 0 < next2 && next2 <= len(ns2) {
+		if 0 < next2 && next2 <= ns2len {
 			i1 = next1
 			i2 = next2
 			continue
@@ -250,51 +256,19 @@ func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
 }
 
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	ns1 := make([]ast.Node, len(exprs1))
-	for i, n := range exprs1 {
-		ns1[i] = n
-	}
-	ns2 := make([]ast.Node, len(exprs2))
-	for i, n := range exprs2 {
-		ns2[i] = n
-	}
-	return m.nodes(ns1, ns2)
+	return m.nodes(exprList(exprs1), exprList(exprs2))
 }
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	ns1 := make([]ast.Node, len(ids1))
-	for i, n := range ids1 {
-		ns1[i] = n
-	}
-	ns2 := make([]ast.Node, len(ids2))
-	for i, n := range ids2 {
-		ns2[i] = n
-	}
-	return m.nodes(ns1, ns2)
+	return m.nodes(identList(ids1), identList(ids2))
 }
 
 func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	ns1 := make([]ast.Node, len(stmts1))
-	for i, n := range stmts1 {
-		ns1[i] = n
-	}
-	ns2 := make([]ast.Node, len(stmts2))
-	for i, n := range stmts2 {
-		ns2[i] = n
-	}
-	return m.nodes(ns1, ns2)
+	return m.nodes(stmtList(stmts1), stmtList(stmts2))
 }
 
 func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	ns1 := make([]ast.Node, len(specs1))
-	for i, n := range specs1 {
-		ns1[i] = n
-	}
-	ns2 := make([]ast.Node, len(specs2))
-	for i, n := range specs2 {
-		ns2[i] = n
-	}
-	return m.nodes(ns1, ns2)
+	return m.nodes(specList(specs1), specList(specs2))
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
@@ -336,4 +310,47 @@ func fromWildNode(node ast.Node) (name string, any bool) {
 		return fromWildNode(x.X)
 	}
 	return "", false
+}
+
+type exprList []ast.Expr
+
+func (e exprList) length() int {
+	return len(e)
+}
+
+func (e exprList) get(i int) ast.Node {
+	return e[i]
+}
+
+func (l exprList) Pos() token.Pos { return l[0].Pos() }
+func (l exprList) End() token.Pos { return l[len(l)-1].End() }
+
+type identList []*ast.Ident
+
+func (e identList) length() int {
+	return len(e)
+}
+
+func (e identList) get(i int) ast.Node {
+	return e[i]
+}
+
+type stmtList []ast.Stmt
+
+func (e stmtList) length() int {
+	return len(e)
+}
+
+func (e stmtList) get(i int) ast.Node {
+	return e[i]
+}
+
+type specList []ast.Spec
+
+func (e specList) length() int {
+	return len(e)
+}
+
+func (e specList) get(i int) ast.Node {
+	return e[i]
 }

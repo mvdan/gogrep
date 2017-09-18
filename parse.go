@@ -54,11 +54,6 @@ func noBadNodes(node ast.Node) bool {
 	return !any
 }
 
-type exprList []ast.Expr
-
-func (l exprList) Pos() token.Pos { return l[0].Pos() }
-func (l exprList) End() token.Pos { return l[len(l)-1].End() }
-
 func parse(src string) (ast.Node, error) {
 	fset := token.NewFileSet()
 	var mainErr error

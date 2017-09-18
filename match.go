@@ -191,10 +191,12 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		_, _ = y, ok
 	case *ast.ForStmt:
 		y, ok := node.(*ast.ForStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+			m.node(x.Post, y.Post) && m.node(x.Body, y.Body)
 	case *ast.RangeStmt:
 		y, ok := node.(*ast.RangeStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
+			m.node(x.X, y.X) && m.node(x.Body, y.Body)
 
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))

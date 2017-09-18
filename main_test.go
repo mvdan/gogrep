@@ -128,6 +128,11 @@ func TestGrep(t *testing.T) {
 		{"if $x { $y }", "if a { b() } else { c() }", 0},
 		{"if $x != nil { $y }", "if a != nil { return a }", 1},
 
+		// for and range stmts
+		{"for $x { $y }", "for b { c() }", 1},
+		{"for $x := range $y { $z }", "for i := range l { c() }", 1},
+		{"for range $y { $z }", "for _, e := range l { e() }", 0},
+
 		// returns
 		{"return nil, $x", "{ return nil, err }", 1},
 		{"return nil, $x", "{ return nil, 0, err }", 0},

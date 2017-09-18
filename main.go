@@ -113,7 +113,9 @@ func compileExpr(expr string) (ast.Node, error) {
 		var s string
 		switch {
 		case t.tok == tokWild:
-			s = wildName(t.lit)
+			s = wildPrefix + t.lit
+		case t.tok == tokWildAny:
+			s = wildPrefix + wildExtraAny + t.lit
 		case t.lit != "":
 			s = t.lit
 		default:

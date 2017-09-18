@@ -12,6 +12,7 @@ import (
 const (
 	_ token.Token = -iota
 	tokWild
+	tokWildAny
 )
 
 type fullToken struct {
@@ -73,6 +74,10 @@ func tokenize(src string) ([]fullToken, error) {
 		}
 		wt := fullToken{t.pos, tokWild, t.lit}
 		t = next()
+		if t.tok == token.MUL {
+			wt.tok = tokWildAny
+			t = next()
+		}
 		toks = append(toks, wt)
 	}
 	return toks, err

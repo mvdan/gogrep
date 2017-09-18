@@ -28,7 +28,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if _, ok := node.(ast.Node); !ok {
 			return false // to not include our extra node types
 		}
-		name := fromWildName(x.Name)
+		name, _ := fromWildName(x.Name)
 		if name == "_" {
 			// values are discarded, matches anything
 			return true
@@ -215,14 +215,36 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 	return (p1 == token.NoPos) == (p2 == token.NoPos)
 }
 
+// nodes matches two lists of nodes. It uses a common algorithm to match
+// wildcard patterns with any number of nodes without recursion.
 func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
-	if len(ns1) != len(ns2) {
-		return false
-	}
-	for i, e1 := range ns1 {
-		if !m.node(e1, ns2[i]) {
-			return false
+	i1, i2 := 0, 0
+	next1, next2 := 0, 0
+	for i1 < len(ns1) || i2 < len(ns2) {
+		if i1 < len(ns1) {
+			n1 := ns1[i1]
+			if _, any := fromWildNode(n1); any {
+				// try to match zero or more at i2,
+				// restarting at i2+1 if it fails
+				next1 = i1
+				next2 = i2 + 1
+				i1++
+				continue
+			}
+			if i2 < len(ns2) && m.node(n1, ns2[i2]) {
+				// ordinary match
+				i1++
+				i2++
+				continue
+			}
 		}
+		// mismatch, try to restart
+		if 0 < next2 && next2 <= len(ns2) {
+			i1 = next1
+			i2 = next2
+			continue
+		}
+		return false
 	}
 	return true
 }
@@ -290,7 +312,10 @@ func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
 	return true
 }
 
-const wildPrefix = "_gogrep_"
+const (
+	wildPrefix   = "_gogrep_"
+	wildExtraAny = "any_"
+)
 
 func wildName(name string) string {
 	// good enough for now
@@ -301,6 +326,18 @@ func isWildName(name string) bool {
 	return strings.HasPrefix(name, wildPrefix)
 }
 
-func fromWildName(name string) string {
-	return strings.TrimPrefix(name, wildPrefix)
+func fromWildName(s string) (name string, any bool) {
+	s = strings.TrimPrefix(s, wildPrefix)
+	name = strings.TrimPrefix(s, wildExtraAny)
+	return name, name != s
+}
+
+func fromWildNode(node ast.Node) (name string, any bool) {
+	switch x := node.(type) {
+	case *ast.Ident:
+		return fromWildName(x.Name)
+	case *ast.ExprStmt:
+		return fromWildNode(x.X)
+	}
+	return "", false
 }

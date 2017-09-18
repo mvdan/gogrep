@@ -25,7 +25,8 @@ func TestGrep(t *testing.T) {
 		{`"`, "", parseErr("1:1: string literal not terminated")},
 
 		// expr parse errors
-		{"{", "", parseErr("6:2: expected '}', found 'EOF'")},
+		{"foo)", "", parseErr("1:5: expected statement, found ')' (and 1 more errors)")},
+		{"{", "", parseErr("2:2: expected '}', found 'EOF'")},
 
 		// basic lits
 		{"123", "123", 1},
@@ -176,7 +177,7 @@ func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 		if err == nil {
 			terr("wanted error %q, got none", want)
 		} else if got := err.Error(); got != string(want) {
-			terr("wanted error %q, got %q", got, want)
+			terr("wanted error %q, got %q", want, got)
 		}
 	case int:
 		if err != nil {

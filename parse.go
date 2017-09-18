@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"go/ast"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"text/template"
 )
@@ -22,7 +23,7 @@ var tmplStmts = template.Must(template.New("stmts").Parse(`
 package _gogrep
 
 func _gogrep() {
-       {{ . }}
+	{{ . }}
 }`))
 
 var tmplType = template.Must(template.New("exprs").Parse(`
@@ -84,9 +85,11 @@ func parse(src string) (ast.Node, error) {
 			return bl, nil
 		}
 	} else {
-		// statements is what covers most cases, so it will give
-		// the best overall error message
-		mainErr = err
+		// Statements is what covers most cases, so it will give
+		// the best overall error message. Show positions
+		// relative to where the user's code is put in the
+		// template.
+		mainErr = subtractPos(err, 4, 1)
 	}
 
 	// type expressions as a last resort, for e.g. chans and interfaces
@@ -98,6 +101,21 @@ func parse(src string) (ast.Node, error) {
 		}
 	}
 	return nil, mainErr
+}
+
+func subtractPos(err error, line, col int) error {
+	list, ok := err.(scanner.ErrorList)
+	if !ok {
+		return err
+	}
+	for i, err := range list {
+		err.Pos.Line -= line
+		if err.Pos.Line == 1 {
+			err.Pos.Column -= col
+		}
+		list[i] = err
+	}
+	return list
 }
 
 func exprLists(n ast.Node) []exprList {

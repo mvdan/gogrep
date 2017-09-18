@@ -215,28 +215,64 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 	return (p1 == token.NoPos) == (p2 == token.NoPos)
 }
 
-func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	if len(exprs1) != len(exprs2) {
+func (m *matcher) nodes(ns1, ns2 []ast.Node) bool {
+	if len(ns1) != len(ns2) {
 		return false
 	}
-	for i, e1 := range exprs1 {
-		if !m.node(e1, exprs2[i]) {
+	for i, e1 := range ns1 {
+		if !m.node(e1, ns2[i]) {
 			return false
 		}
 	}
 	return true
 }
 
+func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
+	ns1 := make([]ast.Node, len(exprs1))
+	for i, n := range exprs1 {
+		ns1[i] = n
+	}
+	ns2 := make([]ast.Node, len(exprs2))
+	for i, n := range exprs2 {
+		ns2[i] = n
+	}
+	return m.nodes(ns1, ns2)
+}
+
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	if len(ids1) != len(ids2) {
-		return false
+	ns1 := make([]ast.Node, len(ids1))
+	for i, n := range ids1 {
+		ns1[i] = n
 	}
-	for i, id1 := range ids1 {
-		if !m.node(id1, ids2[i]) {
-			return false
-		}
+	ns2 := make([]ast.Node, len(ids2))
+	for i, n := range ids2 {
+		ns2[i] = n
 	}
-	return true
+	return m.nodes(ns1, ns2)
+}
+
+func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
+	ns1 := make([]ast.Node, len(stmts1))
+	for i, n := range stmts1 {
+		ns1[i] = n
+	}
+	ns2 := make([]ast.Node, len(stmts2))
+	for i, n := range stmts2 {
+		ns2[i] = n
+	}
+	return m.nodes(ns1, ns2)
+}
+
+func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
+	ns1 := make([]ast.Node, len(specs1))
+	for i, n := range specs1 {
+		ns1[i] = n
+	}
+	ns2 := make([]ast.Node, len(specs2))
+	for i, n := range specs2 {
+		ns2[i] = n
+	}
+	return m.nodes(ns1, ns2)
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
@@ -248,30 +284,6 @@ func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
 	}
 	for i, f1 := range fields1.List {
 		if !m.node(f1, fields2.List[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	if len(stmts1) != len(stmts2) {
-		return false
-	}
-	for i, s1 := range stmts1 {
-		if !m.node(s1, stmts2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	if len(specs1) != len(specs2) {
-		return false
-	}
-	for i, s1 := range specs1 {
-		if !m.node(s1, specs2[i]) {
 			return false
 		}
 	}

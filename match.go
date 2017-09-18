@@ -312,15 +312,11 @@ func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
 	return true
 }
 
+// using a prefix is good enough for now
 const (
 	wildPrefix   = "_gogrep_"
 	wildExtraAny = "any_"
 )
-
-func wildName(name string) string {
-	// good enough for now
-	return wildPrefix + name
-}
 
 func isWildName(name string) bool {
 	return strings.HasPrefix(name, wildPrefix)

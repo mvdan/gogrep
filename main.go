@@ -112,7 +112,7 @@ func compileExpr(expr string) (ast.Node, error) {
 	for _, t := range toks {
 		var s string
 		switch {
-		case t.tok == tokWildcard:
+		case t.tok == tokWild:
 			s = wildName(t.lit)
 		case t.lit != "":
 			s = t.lit

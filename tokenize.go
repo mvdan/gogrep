@@ -11,10 +11,11 @@ import (
 
 const (
 	_ token.Token = -iota
-	tokWildcard
+	tokWild
 )
 
 type fullToken struct {
+	pos token.Position
 	tok token.Token
 	lit string
 }
@@ -34,29 +35,45 @@ func tokenize(src string) ([]fullToken, error) {
 	}
 	s.Init(file, []byte(src), onError, scanner.ScanComments)
 
-	var toks []fullToken
-	gotDollar := false
+	var remaining []fullToken
 	for {
 		pos, tok, lit := s.Scan()
-		fpos := fset.Position(pos)
-		if gotDollar {
-			if tok != token.IDENT {
-				err = fmt.Errorf("%v: $ must be followed by ident, got %v",
-					fpos, tok)
-				break
-			}
-			gotDollar = false
-			toks = append(toks, fullToken{tokWildcard, lit})
-			continue
+		if err != nil {
+			return nil, err
 		}
-		if tok == token.EOF || err != nil {
+		remaining = append(remaining, fullToken{fset.Position(pos), tok, lit})
+		if tok == token.EOF {
+			// remaining has a trailing token.EOF
 			break
 		}
-		if tok == token.ILLEGAL && lit == "$" {
-			gotDollar = true
-		} else {
-			toks = append(toks, fullToken{tok, lit})
+	}
+	next := func() fullToken {
+		t := remaining[0]
+		remaining = remaining[1:]
+		return t
+	}
+
+	var toks []fullToken
+	t := next()
+	for {
+		if t.tok == token.EOF {
+			break
 		}
+		if t.tok != token.ILLEGAL || t.lit != "$" {
+			// regular Go code
+			toks = append(toks, t)
+			t = next()
+			continue
+		}
+		t = next()
+		if t.tok != token.IDENT {
+			err = fmt.Errorf("%v: $ must be followed by ident, got %v",
+				t.pos, t.tok)
+			break
+		}
+		wt := fullToken{t.pos, tokWild, t.lit}
+		t = next()
+		toks = append(toks, wt)
 	}
 	return toks, err
 }

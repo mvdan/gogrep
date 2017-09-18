@@ -134,6 +134,17 @@ func TestGrep(t *testing.T) {
 		{"for $x := range $y { $z }", "for i := range l { c() }", 1},
 		{"for range $y { $z }", "for _, e := range l { e() }", 0},
 
+		// declarations
+		{"const $x = $y", "const a = b", 1},
+		{"const $x = $y", "const (a = b)", 1},
+		{"const $x = $y", "const (a = b\nc = d)", 0},
+		{"var $x int", "var a int", 1},
+		{"var $x int", "var a int = 3", 0},
+
+		// inc/dec stmts
+		{"$x++", "a[b]++", 1},
+		{"$x--", "a++", 0},
+
 		// returns
 		{"return nil, $x", "{ return nil, err }", 1},
 		{"return nil, $x", "{ return nil, 0, err }", 0},

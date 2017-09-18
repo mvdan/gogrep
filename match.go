@@ -121,13 +121,18 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.TypeAssertExpr)
 		return ok && m.node(x.X, y.X) && m.node(x.Type, y.Type)
 
+	// decls
+	case *ast.GenDecl:
+		y, ok := node.(*ast.GenDecl)
+		return ok && x.Tok == y.Tok && m.specs(x.Specs, y.Specs)
+
 	// specs
 	case *ast.ValueSpec:
 		y, ok := node.(*ast.ValueSpec)
 		return ok && m.idents(x.Names, y.Names) &&
 			m.node(x.Type, y.Type) && m.exprs(x.Values, y.Values)
 
-	// stmts
+	// stmt bridge nodes
 	case *ast.ExprStmt:
 		if id, ok := x.X.(*ast.Ident); ok && isWildName(id.Name) {
 			// prefer matching $x as a statement, as it's
@@ -138,7 +143,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && m.node(x.X, y.X)
 	case *ast.DeclStmt:
 		y, ok := node.(*ast.DeclStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Decl, y.Decl)
+
+	// stmts
 	case *ast.EmptyStmt:
 		y, ok := node.(*ast.EmptyStmt)
 		_, _ = y, ok
@@ -150,7 +157,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		_, _ = y, ok
 	case *ast.IncDecStmt:
 		y, ok := node.(*ast.IncDecStmt)
-		_, _ = y, ok
+		return ok && x.Tok == y.Tok && m.node(x.X, y.X)
 	case *ast.AssignStmt:
 		y, ok := node.(*ast.AssignStmt)
 		return ok && x.Tok == y.Tok && m.exprs(x.Lhs, y.Lhs) &&
@@ -253,6 +260,18 @@ func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
 	}
 	for i, s1 := range stmts1 {
 		if !m.node(s1, stmts2[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
+	if len(specs1) != len(specs2) {
+		return false
+	}
+	for i, s1 := range specs1 {
+		if !m.node(s1, specs2[i]) {
 			return false
 		}
 	}

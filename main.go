@@ -46,10 +46,20 @@ func grepArgs(expr string, args []string) error {
 		return err
 	}
 	fset := token.NewFileSet()
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	paths := gotool.ImportPaths(args)
 	var matches []ast.Node
-	typed = true // TODO: remove
 	if !typed {
+		nodes, err := loadPaths(wd, fset, paths)
+		if err != nil {
+			return err
+		}
+		for _, node := range nodes {
+			matches = append(matches, search(exprNode, node)...)
+		}
 	} else {
 		prog, err := loadTyped(fset, paths)
 		if err != nil {
@@ -61,7 +71,6 @@ func grepArgs(expr string, args []string) error {
 			}
 		}
 	}
-	wd, _ := os.Getwd()
 	for _, n := range matches {
 		fpos := fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {

@@ -5,14 +5,37 @@ package main
 
 import (
 	"go/ast"
+	"go/build"
+	"go/parser"
 	"go/token"
+	"path/filepath"
 
 	"golang.org/x/tools/go/loader"
 )
 
-func loadPaths(fset *token.FileSet, paths []string) []*ast.File {
-	// TODO: implement
-	return nil
+func loadPaths(wd string, fset *token.FileSet, paths []string) ([]ast.Node, error) {
+	var nodes []ast.Node
+	ctx := build.Default
+	for _, path := range paths {
+		pkg, err := ctx.Import(path, wd, 0)
+		if err != nil {
+			return nil, err
+		}
+		for _, names := range [...][]string{
+			pkg.GoFiles, pkg.CgoFiles, pkg.IgnoredGoFiles,
+			pkg.TestGoFiles, pkg.XTestGoFiles,
+		} {
+			for _, name := range names {
+				path := filepath.Join(pkg.Dir, name)
+				f, err := parser.ParseFile(fset, path, nil, 0)
+				if err != nil {
+					return nil, err
+				}
+				nodes = append(nodes, f)
+			}
+		}
+	}
+	return nodes, nil
 }
 
 func loadTyped(fset *token.FileSet, paths []string) (*loader.Program, error) {

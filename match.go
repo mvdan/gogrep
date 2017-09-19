@@ -67,7 +67,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 
 	// lits
 	case *ast.BasicLit:
-		// TODO: also try with resolved constants?
 		y, ok := node.(*ast.BasicLit)
 		return ok && x.Kind == y.Kind && x.Value == y.Value
 	case *ast.CompositeLit:

@@ -216,8 +216,8 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 }
 
 type nodeList interface {
-	get(i int) ast.Node
-	length() int
+	at(i int) ast.Node
+	len() int
 }
 
 // nodes matches two lists of nodes. It uses a common algorithm to match
@@ -225,10 +225,10 @@ type nodeList interface {
 func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
-	ns1len, ns2len := ns1.length(), ns2.length()
+	ns1len, ns2len := ns1.len(), ns2.len()
 	for i1 < ns1len || i2 < ns2len {
 		if i1 < ns1len {
-			n1 := ns1.get(i1)
+			n1 := ns1.at(i1)
 			if _, any := fromWildNode(n1); any {
 				// try to match zero or more at i2,
 				// restarting at i2+1 if it fails
@@ -237,7 +237,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				i1++
 				continue
 			}
-			if i2 < ns2len && m.node(n1, ns2.get(i2)) {
+			if i2 < ns2len && m.node(n1, ns2.at(i2)) {
 				// ordinary match
 				i1++
 				i2++
@@ -314,43 +314,24 @@ func fromWildNode(node ast.Node) (name string, any bool) {
 
 type exprList []ast.Expr
 
-func (e exprList) length() int {
-	return len(e)
-}
-
-func (e exprList) get(i int) ast.Node {
-	return e[i]
-}
+func (e exprList) len() int          { return len(e) }
+func (e exprList) at(i int) ast.Node { return e[i] }
 
 func (l exprList) Pos() token.Pos { return l[0].Pos() }
 func (l exprList) End() token.Pos { return l[len(l)-1].End() }
 
 type identList []*ast.Ident
 
-func (e identList) length() int {
-	return len(e)
-}
+func (e identList) len() int { return len(e) }
 
-func (e identList) get(i int) ast.Node {
-	return e[i]
-}
+func (e identList) at(i int) ast.Node { return e[i] }
 
 type stmtList []ast.Stmt
 
-func (e stmtList) length() int {
-	return len(e)
-}
-
-func (e stmtList) get(i int) ast.Node {
-	return e[i]
-}
+func (e stmtList) len() int          { return len(e) }
+func (e stmtList) at(i int) ast.Node { return e[i] }
 
 type specList []ast.Spec
 
-func (e specList) length() int {
-	return len(e)
-}
-
-func (e specList) get(i int) ast.Node {
-	return e[i]
-}
+func (e specList) len() int          { return len(e) }
+func (e specList) at(i int) ast.Node { return e[i] }

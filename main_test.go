@@ -49,13 +49,13 @@ func TestGrep(t *testing.T) {
 		{"$x, $y", "1", 0},
 
 		// any number of expressions (TODO: remember the lists)
-		{"print($x*)", "print()", 1},
-		{"print($x*)", "print(a, b)", 1},
-		{"print($x*, $y, $z*)", "print()", 0},
-		{"print($x*, $y, $z*)", "print(a)", 1},
-		{"print($x*, $y, $z*)", "print(a, b, c)", 1},
-		{"{ $_*; return nil }", "{ return nil }", 1},
-		{"{ $_*; return nil }", "{ a(); b(); return nil }", 1},
+		{"print($*x)", "print()", 1},
+		{"print($*x)", "print(a, b)", 1},
+		{"print($*x, $y, $*z)", "print()", 0},
+		{"print($*x, $y, $*z)", "print(a)", 1},
+		{"print($*x, $y, $*z)", "print(a, b, c)", 1},
+		{"{ $*_; return nil }", "{ return nil }", 1},
+		{"{ $*_; return nil }", "{ a(); b(); return nil }", 1},
 
 		// composite lits
 		{"[]float64{$x}", "[]float64{3}", 1},

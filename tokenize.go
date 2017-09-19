@@ -66,18 +66,19 @@ func tokenize(src string) ([]fullToken, error) {
 			t = next()
 			continue
 		}
-		t = next()
-		if t.tok != token.IDENT {
-			err = fmt.Errorf("%v: $ must be followed by ident, got %v",
-				t.pos, t.tok)
-			break
-		}
-		wt := fullToken{t.pos, tokWild, t.lit}
+		wt := fullToken{t.pos, tokWild, ""}
 		t = next()
 		if t.tok == token.MUL {
 			wt.tok = tokWildAny
 			t = next()
 		}
+		if t.tok != token.IDENT {
+			err = fmt.Errorf("%v: $ must be followed by ident, got %v",
+				t.pos, t.tok)
+			break
+		}
+		wt.lit = t.lit
+		t = next()
 		toks = append(toks, wt)
 	}
 	return toks, err

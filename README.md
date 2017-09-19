@@ -17,10 +17,10 @@ other words, they must be equal in the source code. The `$_` wildcard
 doesn't follow this rule, so it can be used to match anything regardless
 of how often it is used.
 
-You can also use a `*` wildcard suffix to match any number of
+You can also use a `*` before the name to match any number of
 expressions or statements, such as:
 
-	$ gogrep 'if err != nil { $_* }'
+	$ gogrep 'if err != nil { $*_ }'
 	main.go:47:2: if err != nil { return err; }
 	main.go:60:2: if err != nil { return err; }
 	tokenize.go:42:3: if err != nil { return nil, err; }

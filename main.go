@@ -61,7 +61,7 @@ func grepArgs(expr string, args []string) error {
 			matches = append(matches, search(exprNode, node)...)
 		}
 	} else {
-		prog, err := loadTyped(fset, paths)
+		prog, err := loadTyped(wd, fset, paths)
 		if err != nil {
 			return err
 		}

@@ -38,8 +38,8 @@ func loadPaths(wd string, fset *token.FileSet, paths []string) ([]ast.Node, erro
 	return nodes, nil
 }
 
-func loadTyped(fset *token.FileSet, paths []string) (*loader.Program, error) {
-	conf := loader.Config{Fset: fset}
+func loadTyped(wd string, fset *token.FileSet, paths []string) (*loader.Program, error) {
+	conf := loader.Config{Fset: fset, Cwd: wd}
 	if _, err := conf.FromArgs(paths, true); err != nil {
 		return nil, err
 	}

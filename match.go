@@ -245,27 +245,57 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 type nodeList interface {
 	at(i int) ast.Node
 	len() int
+	slice(from, to int) nodeList
 	ast.Node
 }
 
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
 func (m *matcher) nodes(ns1, ns2 nodeList) bool {
+	recorded := map[string]ast.Node{}
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
 	ns1len, ns2len := ns1.len(), ns2.len()
+	wildName, wildStart := "", 0
+
+	// wouldMatch returns whether the current wildcard - if any -
+	// matches the nodes we are currently trying it on.
+	wouldMatch := func() bool {
+		switch wildName {
+		case "", "_":
+			return true
+		}
+		list := ns2.slice(wildStart, i2)
+		prev, ok := m.values[wildName]
+		if ok && !m.node(prev, list) {
+			return false
+		}
+		recorded[wildName] = list
+		return true
+	}
 	for i1 < ns1len || i2 < ns2len {
 		if i1 < ns1len {
 			n1 := ns1.at(i1)
-			if _, any := fromWildNode(n1); any {
+			name, any := fromWildNode(n1)
+			switch {
+			case any:
+				// keep track of where this wildcard
+				// started (if name == wildName, we're
+				// trying the same wildcard matching one
+				// more node)
+				if name != wildName {
+					wildStart = i2
+					wildName = name
+				}
 				// try to match zero or more at i2,
 				// restarting at i2+1 if it fails
 				next1 = i1
 				next2 = i2 + 1
 				i1++
+				wildName = name
 				continue
-			}
-			if i2 < ns2len && m.node(n1, ns2.at(i2)) {
+			case i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)):
+				wildName = ""
 				// ordinary match
 				i1++
 				i2++
@@ -279,6 +309,13 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 			continue
 		}
 		return false
+	}
+	if !wouldMatch() {
+		return false
+	}
+	// only record new wildcard values if we matched the entire list
+	for name, node := range recorded {
+		m.values[name] = node
 	}
 	return true
 }
@@ -354,6 +391,11 @@ func (l exprList) at(i int) ast.Node  { return l[i] }
 func (l identList) at(i int) ast.Node { return l[i] }
 func (l stmtList) at(i int) ast.Node  { return l[i] }
 func (l specList) at(i int) ast.Node  { return l[i] }
+
+func (l exprList) slice(i, j int) nodeList  { return l[i:j] }
+func (l identList) slice(i, j int) nodeList { return l[i:j] }
+func (l stmtList) slice(i, j int) nodeList  { return l[i:j] }
+func (l specList) slice(i, j int) nodeList  { return l[i:j] }
 
 func (l exprList) Pos() token.Pos  { return l[0].Pos() }
 func (l identList) Pos() token.Pos { return l[0].Pos() }

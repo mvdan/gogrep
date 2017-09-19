@@ -14,8 +14,6 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/tools/go/loader"
-
 	"github.com/kisielk/gotool"
 )
 
@@ -43,35 +41,33 @@ Example:
 }
 
 func grepArgs(expr string, args []string) error {
-	exprNode, err := compileExpr(expr)
+	exprNode, typed, err := compileExpr(expr)
 	if err != nil {
 		return err
 	}
+	fset := token.NewFileSet()
 	paths := gotool.ImportPaths(args)
-	conf := loader.Config{
-		TypeCheckFuncBodies: func(path string) bool {
-			return false
-		},
-	}
-	if _, err := conf.FromArgs(paths, true); err != nil {
-		return err
-	}
-	prog, err := conf.Load()
-	if err != nil {
-		return err
-	}
-	wd, _ := os.Getwd()
-	for _, pkg := range prog.InitialPackages() {
-		for _, file := range pkg.Files {
-			matches := search(exprNode, file)
-			for _, n := range matches {
-				fpos := conf.Fset.Position(n.Pos())
-				if strings.HasPrefix(fpos.Filename, wd) {
-					fpos.Filename = fpos.Filename[len(wd)+1:]
-				}
-				fmt.Printf("%v: %s\n", fpos, singleLinePrint(n))
+	var matches []ast.Node
+	typed = true // TODO: remove
+	if !typed {
+	} else {
+		prog, err := loadTyped(fset, paths)
+		if err != nil {
+			return err
+		}
+		for _, pkg := range prog.InitialPackages() {
+			for _, file := range pkg.Files {
+				matches = append(matches, search(exprNode, file)...)
 			}
 		}
+	}
+	wd, _ := os.Getwd()
+	for _, n := range matches {
+		fpos := fset.Position(n.Pos())
+		if strings.HasPrefix(fpos.Filename, wd) {
+			fpos.Filename = fpos.Filename[len(wd)+1:]
+		}
+		fmt.Printf("%v: %s\n", fpos, singleLinePrint(n))
 	}
 	return nil
 }
@@ -103,10 +99,10 @@ func singleLinePrint(node ast.Node) string {
 	return buf.String()
 }
 
-func compileExpr(expr string) (ast.Node, error) {
+func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 	toks, err := tokenize(expr)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse expr: %v", err)
+		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
 	var buf bytes.Buffer
 	for _, t := range toks {
@@ -126,11 +122,10 @@ func compileExpr(expr string) (ast.Node, error) {
 	}
 	// trailing newlines can cause issues with commas
 	exprStr := strings.TrimSpace(buf.String())
-	node, err := parse(exprStr)
-	if err != nil {
-		return nil, fmt.Errorf("cannot parse expr: %v", err)
+	if node, err = parse(exprStr); err != nil {
+		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	return node, nil
+	return node, typed, nil
 }
 
 func search(exprNode, node ast.Node) []ast.Node {

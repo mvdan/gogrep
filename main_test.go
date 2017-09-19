@@ -176,7 +176,7 @@ func TestGrep(t *testing.T) {
 }
 
 func grepStrs(expr, src string) ([]ast.Node, error) {
-	exprNode, err := compileExpr(expr)
+	exprNode, _, err := compileExpr(expr)
 	if err != nil {
 		return nil, err
 	}

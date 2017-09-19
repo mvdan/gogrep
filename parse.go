@@ -94,7 +94,7 @@ func parse(src string) (ast.Node, error) {
 			if len(bl.List) == 1 {
 				return bl.List[0], nil
 			}
-			return bl, nil
+			return stmtList(bl.List), nil
 		}
 	} else {
 		// Statements is what covers most cases, so it will give

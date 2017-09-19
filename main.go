@@ -139,18 +139,33 @@ func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 
 func search(exprNode, node ast.Node) []ast.Node {
 	var matches []ast.Node
-	match := func(node ast.Node) {
+	match := func(exprNode, node ast.Node) {
 		m := matcher{values: map[string]ast.Node{}}
 		if m.node(exprNode, node) {
 			matches = append(matches, node)
 		}
 	}
-	ast.Inspect(node, func(node ast.Node) bool {
-		match(node)
+	visit := func(node ast.Node) bool {
+		match(exprNode, node)
 		for _, list := range exprLists(node) {
-			match(list)
+			match(exprNode, list)
 		}
 		return true
-	})
+	}
+	// ast.Walk barfs on ast.Node types it doesn't know, so
+	// do the first level manually here
+	if list, ok := node.(nodeList); ok {
+		if e, ok := exprNode.(ast.Expr); ok {
+			// otherwise "$*a" won't match "a; b", as the
+			// former isn't a list unless we make it one
+			match(exprList([]ast.Expr{e}), list)
+		}
+		match(exprNode, list)
+		for i := 0; i < list.len(); i++ {
+			ast.Inspect(list.at(i), visit)
+		}
+	} else {
+		ast.Inspect(node, visit)
+	}
 	return matches
 }

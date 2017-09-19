@@ -12,25 +12,25 @@ import (
 	"text/template"
 )
 
-var tmplDecl = template.Must(template.New("exprs").Parse(`
+var tmplDecl = template.Must(template.New("").Parse(`
 package p
 {{ . }}`))
 
-var tmplExprs = template.Must(template.New("exprs").Parse(`
+var tmplExprs = template.Must(template.New("").Parse(`
 package p
 
 var _ = []interface{}{
 	{{ . }},
 }`))
 
-var tmplStmts = template.Must(template.New("stmts").Parse(`
+var tmplStmts = template.Must(template.New("").Parse(`
 package p
 
 func _() {
 	{{ . }}
 }`))
 
-var tmplType = template.Must(template.New("exprs").Parse(`
+var tmplType = template.Must(template.New("").Parse(`
 package p
 
 var _ {{ . }}`))

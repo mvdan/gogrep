@@ -147,14 +147,14 @@ func (m *matcher) node(expr, node ast.Node) bool {
 
 	// stmts
 	case *ast.EmptyStmt:
-		y, ok := node.(*ast.EmptyStmt)
-		_, _ = y, ok
+		_, ok := node.(*ast.EmptyStmt)
+		return ok
 	case *ast.LabeledStmt:
 		y, ok := node.(*ast.LabeledStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Label, y.Label) && m.node(x.Stmt, y.Stmt)
 	case *ast.SendStmt:
 		y, ok := node.(*ast.SendStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Chan, y.Chan) && m.node(x.Value, y.Value)
 	case *ast.IncDecStmt:
 		y, ok := node.(*ast.IncDecStmt)
 		return ok && x.Tok == y.Tok && m.node(x.X, y.X)
@@ -173,7 +173,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && m.exprs(x.Results, y.Results)
 	case *ast.BranchStmt:
 		y, ok := node.(*ast.BranchStmt)
-		_, _ = y, ok
+		return ok && x.Tok == y.Tok && m.node(maybeNilIdent(x.Label), maybeNilIdent(y.Label))
 	case *ast.BlockStmt:
 		y, ok := node.(*ast.BlockStmt)
 		return ok && m.stmts(x.List, y.List)
@@ -183,19 +183,19 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 	case *ast.CaseClause:
 		y, ok := node.(*ast.CaseClause)
-		_, _ = y, ok
+		return ok && m.exprs(x.List, y.List) && m.stmts(x.Body, y.Body)
 	case *ast.SwitchStmt:
 		y, ok := node.(*ast.SwitchStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
 	case *ast.TypeSwitchStmt:
 		y, ok := node.(*ast.TypeSwitchStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Init, y.Init) && m.node(x.Assign, y.Assign) && m.node(x.Body, y.Body)
 	case *ast.CommClause:
 		y, ok := node.(*ast.CommClause)
-		_, _ = y, ok
+		return ok && m.node(x.Comm, y.Comm) && m.stmts(x.Body, y.Body)
 	case *ast.SelectStmt:
 		y, ok := node.(*ast.SelectStmt)
-		_, _ = y, ok
+		return ok && m.node(x.Body, y.Body)
 	case *ast.ForStmt:
 		y, ok := node.(*ast.ForStmt)
 		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
@@ -204,11 +204,17 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.RangeStmt)
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
 			m.node(x.X, y.X) && m.node(x.Body, y.Body)
-
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
 	panic(fmt.Sprintf("unfinished node: %T", expr))
+}
+
+func maybeNilIdent(x *ast.Ident) ast.Node {
+	if x == nil {
+		return nil
+	}
+	return x
 }
 
 func (m *matcher) noPos(p1, p2 token.Pos) bool {

@@ -179,6 +179,46 @@ func TestGrep(t *testing.T) {
 		{"defer $x()", "defer func() { a() }()", 1},
 		{"defer func() { $x }()", "defer func() { a() }()", 1},
 		{"defer func() { $x }()", "defer a()", 0},
+
+		// empty statement
+		{";", ";", 1},
+
+		// labeled statement
+		{"foo: a", "foo: a", 1},
+		{"foo: a", "foo: b", 0},
+
+		// send statement
+		{"x <- 1", "x <- 1", 1},
+		{"x <- 1", "y <- 1", 0},
+		{"x <- 1", "x <- 2", 0},
+
+		// branch statement
+		{"break foo", "break foo", 1},
+		{"break foo", "break bar", 0},
+		{"break foo", "continue foo", 0},
+		{"break", "break", 1},
+		{"break foo", "break", 0},
+
+		// case clause
+		{"switch x {case 4: x}", "switch x {case 4: x}", 1},
+		{"switch x {case 4: x}", "switch y {case 4: x}", 0},
+		{"switch x {case 4: x}", "switch x {case 5: x}", 0},
+
+		// switch statement
+		{"switch x; y {}", "switch x; y {}", 1},
+		{"switch x {}", "switch x; y {}", 0},
+		{"switch {}", "switch {}", 1},
+		{"switch {}", "switch x {}", 0},
+		{"switch {}", "switch {case y:}", 0},
+
+		// type switch statement
+		{"switch x := y.(z); x {}", "switch x := y.(z); x {}", 1},
+		{"switch x := y.(z); x {}", "switch y := y.(z); x {}", 0},
+		{"switch x := y.(z); x {}", "switch y := y.(z); x {}", 0},
+		// TODO more switch variations.
+
+		// TODO select statement
+		// TODO communication clause
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {

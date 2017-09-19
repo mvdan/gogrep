@@ -1,5 +1,7 @@
 # gogrep
 
+[![Build Status](https://travis-ci.org/mvdan/gogrep.svg?branch=master)](https://travis-ci.org/mvdan/gogrep)
+
 Rog and Dan's drunken idea. Work in progress.
 
 	go get -u mvdan.cc/gogrep

@@ -245,6 +245,7 @@ func (m *matcher) noPos(p1, p2 token.Pos) bool {
 type nodeList interface {
 	at(i int) ast.Node
 	len() int
+	ast.Node
 }
 
 // nodes matches two lists of nodes. It uses a common algorithm to match
@@ -340,25 +341,26 @@ func fromWildNode(node ast.Node) (name string, any bool) {
 }
 
 type exprList []ast.Expr
-
-func (e exprList) len() int          { return len(e) }
-func (e exprList) at(i int) ast.Node { return e[i] }
-
-func (l exprList) Pos() token.Pos { return l[0].Pos() }
-func (l exprList) End() token.Pos { return l[len(l)-1].End() }
-
 type identList []*ast.Ident
-
-func (e identList) len() int { return len(e) }
-
-func (e identList) at(i int) ast.Node { return e[i] }
-
 type stmtList []ast.Stmt
-
-func (e stmtList) len() int          { return len(e) }
-func (e stmtList) at(i int) ast.Node { return e[i] }
-
 type specList []ast.Spec
 
-func (e specList) len() int          { return len(e) }
-func (e specList) at(i int) ast.Node { return e[i] }
+func (l exprList) len() int  { return len(l) }
+func (l identList) len() int { return len(l) }
+func (l stmtList) len() int  { return len(l) }
+func (l specList) len() int  { return len(l) }
+
+func (l exprList) at(i int) ast.Node  { return l[i] }
+func (l identList) at(i int) ast.Node { return l[i] }
+func (l stmtList) at(i int) ast.Node  { return l[i] }
+func (l specList) at(i int) ast.Node  { return l[i] }
+
+func (l exprList) Pos() token.Pos  { return l[0].Pos() }
+func (l identList) Pos() token.Pos { return l[0].Pos() }
+func (l stmtList) Pos() token.Pos  { return l[0].Pos() }
+func (l specList) Pos() token.Pos  { return l[0].Pos() }
+
+func (l exprList) End() token.Pos  { return l[len(l)-1].End() }
+func (l identList) End() token.Pos { return l[len(l)-1].End() }
+func (l stmtList) End() token.Pos  { return l[len(l)-1].End() }
+func (l specList) End() token.Pos  { return l[len(l)-1].End() }

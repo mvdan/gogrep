@@ -104,6 +104,10 @@ func TestGrep(t *testing.T) {
 		{"$x.Field", "a.Field", 1},
 		{"$x.Field", "a.field", 0},
 		{"$x.Method()", "a.Method()", 1},
+		{"a.b", "a.b.c", 1},
+		{"b.c", "a.b.c", 0},
+		{"$x.c", "a.b.c", 1},
+		{"a.$x", "a.b.c", 1},
 
 		// indexes
 		{"$x[len($x)-1]", "a[len(a)-1]", 1},

@@ -6,9 +6,16 @@ Rog and Dan's drunken idea. Work in progress.
 
 	go get -u mvdan.cc/gogrep
 
-Its first argument is a pattern to match. It can be any Go expression or
-statement, which may include wildcards. Wildcards are identifiers
-preceded by `$`.
+Its first argument is a pattern to match. It can be any of the
+following:
+
+ * Any number of statements
+ * Any number of expressions
+ * A type expression
+ * A top-level declaration
+ * An entire file
+
+A pattern can include wildcards, which start with the `$` symbol:
 
 	$ gogrep 'if $x != nil { return $x }'
 	main.go:47:2: if err != nil { return err; }

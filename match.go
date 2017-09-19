@@ -19,6 +19,24 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return expr == node
 	}
 	switch x := expr.(type) {
+	case *ast.File:
+		y, ok := node.(*ast.File)
+		if !ok || !m.node(x.Name, y.Name) || len(x.Decls) != len(y.Decls) ||
+			len(x.Imports) != len(y.Imports) {
+			return false
+		}
+		for i, decl := range x.Decls {
+			if !m.node(decl, y.Decls[i]) {
+				return false
+			}
+		}
+		for i, imp := range x.Imports {
+			if !m.node(imp, y.Imports[i]) {
+				return false
+			}
+		}
+		return true
+
 	case *ast.Ident:
 		if !isWildName(x.Name) {
 			// not a wildcard
@@ -125,6 +143,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.GenDecl:
 		y, ok := node.(*ast.GenDecl)
 		return ok && x.Tok == y.Tok && m.specs(x.Specs, y.Specs)
+	case *ast.FuncDecl:
+		y, ok := node.(*ast.FuncDecl)
+		return ok && m.fields(x.Recv, y.Recv) && m.node(x.Name, y.Name) &&
+			m.node(x.Type, y.Type) && m.node(x.Body, y.Body)
 
 	// specs
 	case *ast.ValueSpec:

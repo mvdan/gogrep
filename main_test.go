@@ -41,7 +41,7 @@ func TestGrep(t *testing.T) {
 		// recursion
 		{"$x", "a + b", 3},
 		{"$x + $x", "foo(a + a, b + b)", 2},
-		{"$x", "var a int", 6},
+		{"$x", "var a int", 5},
 		{"go foo()", "a(); go foo(); a()", 1},
 
 		// many value expressions
@@ -129,6 +129,21 @@ func TestGrep(t *testing.T) {
 		{"$x(); $y()", "a(); b()", 1},
 		{"$x(); $y()", "a()", 0},
 
+		// declarations
+		{"const $x = $y", "const a = b", 1},
+		{"const $x = $y", "const (a = b)", 1},
+		{"const $x = $y", "const (a = b\nc = d)", 0},
+		{"var $x int", "var a int", 1},
+		{"var $x int", "var a int = 3", 0},
+		{
+			"func $_($x $y) $y { return $x }",
+			"func a(i int) int { return i }", 1,
+		},
+
+		// entire files
+		{"package $_", "package p; var a = 1", 0},
+		{"package $_; func Foo() { $*_ }", "package p; func Foo() {}", 1},
+
 		// blocks
 		{"{ $x }", "{ a() }", 1},
 		{"{ $x }", "{ a(); b() }", 0},
@@ -146,13 +161,6 @@ func TestGrep(t *testing.T) {
 		{"for $x { $y }", "for b { c() }", 1},
 		{"for $x := range $y { $z }", "for i := range l { c() }", 1},
 		{"for range $y { $z }", "for _, e := range l { e() }", 0},
-
-		// declarations
-		{"const $x = $y", "const a = b", 1},
-		{"const $x = $y", "const (a = b)", 1},
-		{"const $x = $y", "const (a = b\nc = d)", 0},
-		{"var $x int", "var a int", 1},
-		{"var $x int", "var a int = 3", 0},
 
 		// inc/dec stmts
 		{"$x++", "a[b]++", 1},

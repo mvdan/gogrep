@@ -12,24 +12,28 @@ import (
 	"text/template"
 )
 
-var tmplExprs = template.Must(template.New("exprs").Parse(`
-package _gogrep
+var tmplDecl = template.Must(template.New("exprs").Parse(`
+package p
+{{ . }}`))
 
-var _gogrep = []interface{}{
+var tmplExprs = template.Must(template.New("exprs").Parse(`
+package p
+
+var _ = []interface{}{
 	{{ . }},
 }`))
 
 var tmplStmts = template.Must(template.New("stmts").Parse(`
-package _gogrep
+package p
 
-func _gogrep() {
+func _() {
 	{{ . }}
 }`))
 
 var tmplType = template.Must(template.New("exprs").Parse(`
-package _gogrep
+package p
 
-var _gogrep {{ . }}`))
+var _ {{ . }}`))
 
 func execTmpl(tmpl *template.Template, src string) string {
 	var buf bytes.Buffer
@@ -58,7 +62,20 @@ func parse(src string) (ast.Node, error) {
 	fset := token.NewFileSet()
 	var mainErr error
 
-	// try as value expressions first
+	// first try as a whole file
+	if f, err := parser.ParseFile(fset, "", src, 0); err == nil && noBadNodes(f) {
+		return f, nil
+	}
+
+	// then as a declaration
+	asDecl := execTmpl(tmplDecl, src)
+	if f, err := parser.ParseFile(fset, "", asDecl, 0); err == nil {
+		if dc := f.Decls[0]; noBadNodes(dc) {
+			return dc, nil
+		}
+	}
+
+	// then as value expressions
 	asExprs := execTmpl(tmplExprs, src)
 	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)

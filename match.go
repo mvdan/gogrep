@@ -259,6 +259,7 @@ type nodeList interface {
 // wildcard patterns with any number of nodes without recursion.
 func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 	recorded := map[string]ast.Node{}
+	final := map[string]bool{}
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
 	ns1len, ns2len := ns1.len(), ns2.len()
@@ -272,8 +273,16 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 			return true
 		}
 		list := ns2.slice(wildStart, i2)
+		// check that it matches any nodes found elsewhere
 		prev, ok := m.values[wildName]
 		if ok && !m.node(prev, list) {
+			return false
+		}
+		// check that it matches any nodes found previously in
+		// this very list (and finalised, i.e. not the same one
+		// we're doing)
+		prev2, ok := recorded[wildName]
+		if ok && final[wildName] && !m.node(prev2, list) {
 			return false
 		}
 		recorded[wildName] = list
@@ -290,6 +299,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				// trying the same wildcard matching one
 				// more node)
 				if name != wildName {
+					final[wildName] = true
 					wildStart = i2
 					wildName = name
 				}
@@ -301,7 +311,10 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				wildName = name
 				continue
 			case i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)):
-				wildName = ""
+				if wildName != "" {
+					final[wildName] = true
+					wildName = ""
+				}
 				// ordinary match
 				i1++
 				i2++

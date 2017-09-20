@@ -144,7 +144,7 @@ func TestGrep(t *testing.T) {
 		// any number of statements
 		{"$*x", "a; b", 1},
 		{"$*x; b; $*y", "a; b; c", 1},
-		// {"$*x; b; $*x", "a; b; c", 0}, TODO: fix
+		{"$*x; b; $*x", "a; b; c", 0},
 
 		// declarations
 		{"const $x = $y", "const a = b", 1},

@@ -156,9 +156,10 @@ func search(exprNode, node ast.Node) []ast.Node {
 	// do the first level manually here
 	if list, ok := node.(nodeList); ok {
 		if e, ok := exprNode.(ast.Expr); ok {
-			// otherwise "$*a" won't match "a; b", as the
-			// former isn't a list unless we make it one
+			// so that "$*a" will match "a, b"
 			match(exprList([]ast.Expr{e}), list)
+			// so that "$*a" will match "a; b"
+			match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
 		}
 		match(exprNode, list)
 		for i := 0; i < list.len(); i++ {

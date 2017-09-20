@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/printer"
 	"go/token"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -104,8 +105,28 @@ func (b *bufferJoinLines) Write(p []byte) (n int, err error) {
 
 func singleLinePrint(node ast.Node) string {
 	var buf bufferJoinLines
-	printer.Fprint(&buf, token.NewFileSet(), node)
+	printNode(&buf, token.NewFileSet(), node)
 	return buf.String()
+}
+
+func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
+	switch x := node.(type) {
+	case exprList:
+		if len(x) == 0 {
+			return
+		}
+		printNode(w, fset, x[0])
+		for _, n := range x[1:] {
+			fmt.Fprintf(w, ", ")
+			printNode(w, fset, n)
+		}
+	default:
+		err := printer.Fprint(w, fset, node)
+		if err != nil && strings.Contains(err.Error(), "go/printer: unsupported node type") {
+			// Should never happen, but make it obvious when it does.
+			panic(fmt.Errorf("cannot print node: %v\n", node, err))
+		}
+	}
 }
 
 func compileExpr(expr string) (node ast.Node, typed bool, err error) {

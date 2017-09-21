@@ -258,12 +258,23 @@ type nodeList interface {
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
 func (m *matcher) nodes(ns1, ns2 nodeList) bool {
-	recorded := map[string]ast.Node{}
-	final := map[string]bool{}
+	// We need to keep a copy of m.values so that we can restart
+	// with a different "any of" match while discarding any matches
+	// we found while trying it.
+	var oldMatches map[string]ast.Node
+	backupMatches := func() {
+		oldMatches = make(map[string]ast.Node, len(m.values))
+		for k, v := range m.values {
+			oldMatches[k] = v
+		}
+	}
+	backupMatches()
+
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
 	ns1len, ns2len := ns1.len(), ns2.len()
-	wildName, wildStart := "", 0
+	wildName := ""
+	wildStart := 0
 
 	// wouldMatch returns whether the current wildcard - if any -
 	// matches the nodes we are currently trying it on.
@@ -278,14 +289,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 		if ok && !m.node(prev, list) {
 			return false
 		}
-		// check that it matches any nodes found previously in
-		// this very list (and finalised, i.e. not the same one
-		// we're doing)
-		prev2, ok := recorded[wildName]
-		if ok && final[wildName] && !m.node(prev2, list) {
-			return false
-		}
-		recorded[wildName] = list
+		m.values[wildName] = list
 		return true
 	}
 	for i1 < ns1len || i2 < ns2len {
@@ -299,7 +303,6 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				// trying the same wildcard matching one
 				// more node)
 				if name != wildName {
-					final[wildName] = true
 					wildStart = i2
 					wildName = name
 				}
@@ -308,13 +311,10 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				next1 = i1
 				next2 = i2 + 1
 				i1++
-				wildName = name
+				backupMatches()
 				continue
 			case i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)):
-				if wildName != "" {
-					final[wildName] = true
-					wildName = ""
-				}
+				wildName = ""
 				// ordinary match
 				i1++
 				i2++
@@ -325,16 +325,13 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 		if 0 < next2 && next2 <= ns2len {
 			i1 = next1
 			i2 = next2
+			m.values = oldMatches
 			continue
 		}
 		return false
 	}
 	if !wouldMatch() {
 		return false
-	}
-	// only record new wildcard values if we matched the entire list
-	for name, node := range recorded {
-		m.values[name] = node
 	}
 	return true
 }

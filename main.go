@@ -182,6 +182,21 @@ func search(exprNode, node ast.Node) []ast.Node {
 			// so that "$*a" will match "a; b"
 			match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
 		}
+		discard := &ast.Ident{Name: wildPrefix + wildExtraAny + "_"}
+		if l, ok := exprNode.(exprList); ok && l.len() < list.len() {
+			// $*_ at both ends to make "b, c" match "a, b, c, d"
+			l2 := []ast.Expr{discard}
+			l2 = append(l2, l...)
+			l2 = append(l2, discard)
+			match(exprList(l2), node)
+		}
+		if l, ok := exprNode.(stmtList); ok && l.len() < list.len() {
+			// $*_ at both ends to make "b; c" match "a; b; c; d"
+			l2 := []ast.Stmt{&ast.ExprStmt{X: discard}}
+			l2 = append(l2, l...)
+			l2 = append(l2, &ast.ExprStmt{X: discard})
+			match(stmtList(l2), node)
+		}
 		match(exprNode, list)
 		for i := 0; i < list.len(); i++ {
 			ast.Inspect(list.at(i), visit)

@@ -47,6 +47,9 @@ func TestGrep(t *testing.T) {
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},
 		{"$x, $y", "1", 0},
+		{"$x", "a, b", 3},
+		{"b, c", "a, b, c, d", 1},
+		{"b, c", "foo(a, b, c, d)", 0},
 
 		// any number of expressions
 		{"$*x", "a, b", 1},
@@ -136,6 +139,9 @@ func TestGrep(t *testing.T) {
 		// many statements
 		{"$x(); $y()", "a(); b()", 1},
 		{"$x(); $y()", "a()", 0},
+		{"$x", "a; b", 5},
+		{"b; c", "a; b; c; d", 1},
+		{"b; c", "{a; b; c; d}", 0},
 
 		// mixing lists
 		{"$x, $y", "1; 2", 0},

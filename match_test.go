@@ -15,7 +15,7 @@ func parseErr(msg string) wantErr {
 	return wantErr("cannot parse expr: " + msg)
 }
 
-func TestGrep(t *testing.T) {
+func TestMatch(t *testing.T) {
 	tests := []struct {
 		expr, src string
 		anyWant   interface{}
@@ -261,7 +261,7 @@ func grepStrs(expr, src string) ([]ast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return search(exprNode, srcNode), nil
+	return matches(exprNode, srcNode), nil
 }
 
 func grepTest(t *testing.T, expr, src string, anyWant interface{}) {

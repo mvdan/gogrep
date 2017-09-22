@@ -52,14 +52,14 @@ func grepArgs(expr string, args []string) error {
 		return err
 	}
 	paths := gotool.ImportPaths(args)
-	var matches []ast.Node
+	var all []ast.Node
 	if !typed {
 		nodes, err := loadPaths(wd, fset, paths)
 		if err != nil {
 			return err
 		}
 		for _, node := range nodes {
-			matches = append(matches, search(exprNode, node)...)
+			all = append(all, matches(exprNode, node)...)
 		}
 	} else {
 		prog, err := loadTyped(wd, fset, paths)
@@ -68,11 +68,11 @@ func grepArgs(expr string, args []string) error {
 		}
 		for _, pkg := range prog.InitialPackages() {
 			for _, file := range pkg.Files {
-				matches = append(matches, search(exprNode, file)...)
+				all = append(all, matches(exprNode, file)...)
 			}
 		}
 	}
-	for _, n := range matches {
+	for _, n := range all {
 		fpos := fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
@@ -156,53 +156,4 @@ func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
 	return node, typed, nil
-}
-
-func search(exprNode, node ast.Node) []ast.Node {
-	var matches []ast.Node
-	match := func(exprNode, node ast.Node) {
-		m := matcher{values: map[string]ast.Node{}}
-		if m.node(exprNode, node) {
-			matches = append(matches, node)
-		}
-	}
-	visit := func(node ast.Node) bool {
-		match(exprNode, node)
-		for _, list := range exprLists(node) {
-			match(exprNode, list)
-		}
-		return true
-	}
-	// ast.Walk barfs on ast.Node types it doesn't know, so
-	// do the first level manually here
-	if list, ok := node.(nodeList); ok {
-		if e, ok := exprNode.(ast.Expr); ok {
-			// so that "$*a" will match "a, b"
-			match(exprList([]ast.Expr{e}), list)
-			// so that "$*a" will match "a; b"
-			match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
-		}
-		discard := &ast.Ident{Name: wildPrefix + wildExtraAny + "_"}
-		if l, ok := exprNode.(exprList); ok && l.len() < list.len() {
-			// $*_ at both ends to make "b, c" match "a, b, c, d"
-			l2 := []ast.Expr{discard}
-			l2 = append(l2, l...)
-			l2 = append(l2, discard)
-			match(exprList(l2), node)
-		}
-		if l, ok := exprNode.(stmtList); ok && l.len() < list.len() {
-			// $*_ at both ends to make "b; c" match "a; b; c; d"
-			l2 := []ast.Stmt{&ast.ExprStmt{X: discard}}
-			l2 = append(l2, l...)
-			l2 = append(l2, &ast.ExprStmt{X: discard})
-			match(stmtList(l2), node)
-		}
-		match(exprNode, list)
-		for i := 0; i < list.len(); i++ {
-			ast.Inspect(list.at(i), visit)
-		}
-	} else {
-		ast.Inspect(node, visit)
-	}
-	return matches
 }

@@ -35,13 +35,13 @@ Example:
 		fmt.Fprintln(os.Stderr, "need at least one arg")
 		os.Exit(2)
 	}
-	if err := grepArgs(args[0], args[1:]); err != nil {
+	if err := grepArgs(os.Stdout, args[0], args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func grepArgs(expr string, args []string) error {
+func grepArgs(w io.Writer, expr string, args []string) error {
 	exprNode, typed, err := compileExpr(expr)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func grepArgs(expr string, args []string) error {
 	paths := gotool.ImportPaths(args)
 	var all []ast.Node
 	if !typed {
-		nodes, err := loadPaths(wd, fset, paths)
+		nodes, err := loadUntyped(wd, fset, paths)
 		if err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ func grepArgs(expr string, args []string) error {
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
 		}
-		fmt.Printf("%v: %s\n", fpos, singleLinePrint(n))
+		fmt.Fprintf(w, "%v: %s\n", fpos, singleLinePrint(n))
 	}
 	return nil
 }

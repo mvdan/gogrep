@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-func loadPaths(wd string, fset *token.FileSet, paths []string) ([]ast.Node, error) {
+func loadUntyped(wd string, fset *token.FileSet, paths []string) ([]ast.Node, error) {
 	var nodes []ast.Node
 	ctx := build.Default
 	addFile := func(path string) error {

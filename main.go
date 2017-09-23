@@ -120,6 +120,15 @@ func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
 			fmt.Fprintf(w, ", ")
 			printNode(w, fset, n)
 		}
+	case stmtList:
+		if len(x) == 0 {
+			return
+		}
+		printNode(w, fset, x[0])
+		for _, n := range x[1:] {
+			fmt.Fprintf(w, "; ")
+			printNode(w, fset, n)
+		}
 	default:
 		err := printer.Fprint(w, fset, node)
 		if err != nil && strings.Contains(err.Error(), "go/printer: unsupported node type") {

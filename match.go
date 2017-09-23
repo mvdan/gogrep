@@ -20,7 +20,7 @@ func matches(exprNode, node ast.Node) []ast.Node {
 	}
 	visit := func(node ast.Node) bool {
 		match(exprNode, node)
-		for _, list := range exprLists(node) {
+		for _, list := range nodeLists(node) {
 			match(exprNode, list)
 		}
 		return true
@@ -440,6 +440,31 @@ func fromWildNode(node ast.Node) (name string, any bool) {
 		return fromWildNode(x.X)
 	}
 	return "", false
+}
+
+func nodeLists(n ast.Node) []nodeList {
+	var lists []nodeList
+	switch x := n.(type) {
+	case *ast.CompositeLit:
+		lists = append(lists, exprList(x.Elts))
+	case *ast.CallExpr:
+		lists = append(lists, exprList(x.Args))
+	case *ast.AssignStmt:
+		lists = append(lists, exprList(x.Lhs))
+		lists = append(lists, exprList(x.Rhs))
+	case *ast.ReturnStmt:
+		lists = append(lists, exprList(x.Results))
+	case *ast.ValueSpec:
+		lists = append(lists, exprList(x.Values))
+	case *ast.BlockStmt:
+		lists = append(lists, stmtList(x.List))
+	case *ast.CaseClause:
+		lists = append(lists, exprList(x.List))
+		lists = append(lists, stmtList(x.Body))
+	case *ast.CommClause:
+		lists = append(lists, stmtList(x.Body))
+	}
+	return lists
 }
 
 type exprList []ast.Expr

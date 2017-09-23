@@ -129,23 +129,3 @@ func subtractPos(err error, line, col int) error {
 	}
 	return list
 }
-
-func exprLists(n ast.Node) []exprList {
-	var lists []exprList
-	switch x := n.(type) {
-	case *ast.CompositeLit:
-		lists = append(lists, x.Elts)
-	case *ast.CallExpr:
-		lists = append(lists, x.Args)
-	case *ast.AssignStmt:
-		lists = append(lists, x.Lhs)
-		lists = append(lists, x.Rhs)
-	case *ast.ReturnStmt:
-		lists = append(lists, x.Results)
-	case *ast.CaseClause:
-		lists = append(lists, x.List)
-	case *ast.ValueSpec:
-		lists = append(lists, x.Values)
-	}
-	return lists
-}

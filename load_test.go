@@ -6,12 +6,15 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/build"
 	"strings"
 	"testing"
 )
 
 func TestLoad(t *testing.T) {
 	const expr = "const _ = $x"
+	ctx := build.Default
+	ctx.GOPATH = "testdata"
 	tests := []struct {
 		args []string
 		want interface{}
@@ -25,22 +28,43 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			[]string{"noexist.go"},
-			fmt.Errorf("open noexist.go: no such file or directory"),
+			fmt.Errorf("no such file or directory"),
+		},
+		{
+			[]string{"./testdata"},
+			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
+		},
+		{
+			[]string{"p1"},
+			`
+				testdata/src/p1/file1.go:3:1: const _ = "file1"
+			`,
+		},
+		{
+			[]string{"p1/..."},
+			`
+				testdata/src/p1/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
+			`,
 		},
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer
-		err := grepArgs(&buf, expr, tc.args)
+		err := grepArgs(&buf, &ctx, expr, tc.args)
 		switch x := tc.want.(type) {
 		case error:
 			if err == nil {
-				t.Errorf("wanted error %v, got none", x)
-			} else if want, got := x.Error(), err.Error(); want != got {
+				t.Errorf("wanted error %q, got none", x)
+				continue
+			}
+			want, got := x.Error(), err.Error()
+			if !strings.Contains(got, want) {
 				t.Errorf("wanted error %q, got %q", want, got)
 			}
 		case string:
 			if err != nil {
-				t.Errorf("didn't want error, but got %v", err)
+				t.Errorf("didn't want error, but got %q", err)
 				break
 			}
 			want := strings.TrimSpace(strings.Replace(x, "\t", "", -1))

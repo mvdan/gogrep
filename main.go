@@ -8,14 +8,13 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/printer"
 	"go/token"
 	"io"
 	"os"
 	"regexp"
 	"strings"
-
-	"github.com/kisielk/gotool"
 )
 
 func main() {
@@ -35,13 +34,13 @@ Example:
 		fmt.Fprintln(os.Stderr, "need at least one arg")
 		os.Exit(2)
 	}
-	if err := grepArgs(os.Stdout, args[0], args[1:]); err != nil {
+	if err := grepArgs(os.Stdout, &build.Default, args[0], args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func grepArgs(w io.Writer, expr string, args []string) error {
+func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string) error {
 	exprNode, typed, err := compileExpr(expr)
 	if err != nil {
 		return err
@@ -51,10 +50,9 @@ func grepArgs(w io.Writer, expr string, args []string) error {
 	if err != nil {
 		return err
 	}
-	paths := gotool.ImportPaths(args)
 	var all []ast.Node
 	if !typed {
-		nodes, err := loadUntyped(wd, fset, paths)
+		nodes, err := loadUntyped(wd, ctx, fset, args)
 		if err != nil {
 			return err
 		}
@@ -62,7 +60,7 @@ func grepArgs(w io.Writer, expr string, args []string) error {
 			all = append(all, matches(exprNode, node)...)
 		}
 	} else {
-		prog, err := loadTyped(wd, fset, paths)
+		prog, err := loadTyped(wd, ctx, fset, args)
 		if err != nil {
 			return err
 		}

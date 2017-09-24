@@ -11,12 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kisielk/gotool"
 	"golang.org/x/tools/go/loader"
 )
 
-func loadUntyped(wd string, fset *token.FileSet, paths []string) ([]ast.Node, error) {
+func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []string) ([]ast.Node, error) {
+	gctx := gotool.Context{BuildContext: *ctx}
+	paths := gctx.ImportPaths(args)
 	var nodes []ast.Node
-	ctx := build.Default
 	addFile := func(path string) error {
 		f, err := parser.ParseFile(fset, path, nil, 0)
 		if err != nil {
@@ -51,8 +53,10 @@ func loadUntyped(wd string, fset *token.FileSet, paths []string) ([]ast.Node, er
 	return nodes, nil
 }
 
-func loadTyped(wd string, fset *token.FileSet, paths []string) (*loader.Program, error) {
-	conf := loader.Config{Fset: fset, Cwd: wd}
+func loadTyped(wd string, ctx *build.Context, fset *token.FileSet, args []string) (*loader.Program, error) {
+	gctx := gotool.Context{BuildContext: *ctx}
+	paths := gctx.ImportPaths(args)
+	conf := loader.Config{Fset: fset, Cwd: wd, Build: ctx}
 	if _, err := conf.FromArgs(paths, true); err != nil {
 		return nil, err
 	}

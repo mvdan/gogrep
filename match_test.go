@@ -25,8 +25,8 @@ func TestMatch(t *testing.T) {
 		{`"`, "", parseErr("1:1: string literal not terminated")},
 
 		// expr parse errors
-		{"foo)", "", parseErr("1:5: expected statement, found ')' (and 1 more errors)")},
-		{"{", "", parseErr("2:2: expected '}', found 'EOF'")},
+		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
+		{"{", "", parseErr("1:3: expected '}', found 'EOF'")},
 
 		// basic lits
 		{"123", "123", 1},

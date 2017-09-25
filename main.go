@@ -136,30 +136,58 @@ func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
 	}
 }
 
+type lineColBuffer struct {
+	bytes.Buffer
+	line, col int
+}
+
+func (l *lineColBuffer) WriteString(s string) (n int, err error) {
+	for _, r := range s {
+		if r == '\n' {
+			l.line++
+			l.col = 1
+		} else {
+			l.col++
+		}
+	}
+	return l.Buffer.WriteString(s)
+}
+
 func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 	toks, err := tokenize(expr)
 	if err != nil {
 		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	var buf bytes.Buffer
+	var offs []posOffset
+	lbuf := lineColBuffer{line: 1, col: 1}
+	addOffset := func(length int) {
+		offs = append(offs, posOffset{
+			atLine: lbuf.line,
+			atCol:  lbuf.col,
+			offset: length,
+		})
+	}
 	for _, t := range toks {
 		var s string
 		switch {
 		case t.tok == tokWild:
 			s = wildPrefix + t.lit
+			addOffset(len(wildPrefix) - 1) // -1 for the $
 		case t.tok == tokWildAny:
 			s = wildPrefix + wildExtraAny + t.lit
+			addOffset(len(wildPrefix+wildExtraAny) - 1) // -1 for the $
 		case t.lit != "":
 			s = t.lit
 		default:
-			buf.WriteString(t.tok.String())
+			lbuf.WriteString(t.tok.String())
 		}
-		buf.WriteString(s)
-		buf.WriteByte(' ') // for e.g. consecutive idents
+		lbuf.WriteString(s)
+		lbuf.WriteString(" ") // for e.g. consecutive idents
 	}
 	// trailing newlines can cause issues with commas
-	exprStr := strings.TrimSpace(buf.String())
+	exprStr := strings.TrimSpace(lbuf.String())
 	if node, err = parse(exprStr); err != nil {
+		err = subPosOffsets(err, offs...)
 		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
 	return node, typed, nil

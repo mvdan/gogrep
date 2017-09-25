@@ -90,7 +90,7 @@ func parse(src string) (ast.Node, error) {
 		// the best overall error message. Show positions
 		// relative to where the user's code is put in the
 		// template.
-		mainErr = subtractPos(err, 23)
+		mainErr = subPosOffsets(err, posOffset{1, 1, 23})
 	}
 
 	// type expressions as a last resort, for e.g. chans and interfaces
@@ -104,14 +104,25 @@ func parse(src string) (ast.Node, error) {
 	return nil, mainErr
 }
 
-func subtractPos(err error, col int) error {
+type posOffset struct {
+	atLine, atCol int
+	offset        int
+}
+
+func subPosOffsets(err error, offs ...posOffset) error {
 	list, ok := err.(scanner.ErrorList)
 	if !ok {
 		return err
 	}
 	for i, err := range list {
-		if err.Pos.Line == 1 {
-			err.Pos.Column -= col
+		for _, off := range offs {
+			if err.Pos.Line != off.atLine {
+				continue
+			}
+			if err.Pos.Column < off.atCol {
+				continue
+			}
+			err.Pos.Column -= off.offset
 		}
 		list[i] = err
 	}

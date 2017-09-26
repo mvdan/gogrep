@@ -138,7 +138,7 @@ func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
 
 type lineColBuffer struct {
 	bytes.Buffer
-	line, col int
+	line, col, offs int
 }
 
 func (l *lineColBuffer) WriteString(s string) (n int, err error) {
@@ -149,6 +149,7 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 		} else {
 			l.col++
 		}
+		l.offs++
 	}
 	return l.Buffer.WriteString(s)
 }
@@ -168,21 +169,25 @@ func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 		})
 	}
 	for _, t := range toks {
+		for lbuf.offs < t.pos.Offset {
+			lbuf.WriteString(" ")
+		}
 		var s string
 		switch {
 		case t.tok == tokWild:
 			s = wildPrefix + t.lit
+			lbuf.offs -= len(wildPrefix) - 1
 			addOffset(len(wildPrefix) - 1) // -1 for the $
 		case t.tok == tokWildAny:
 			s = wildPrefix + wildExtraAny + t.lit
+			lbuf.offs -= len(wildPrefix+wildExtraAny) - 1
 			addOffset(len(wildPrefix+wildExtraAny) - 1) // -1 for the $
 		case t.lit != "":
 			s = t.lit
 		default:
-			lbuf.WriteString(t.tok.String())
+			s = t.tok.String()
 		}
 		lbuf.WriteString(s)
-		lbuf.WriteString(" ") // for e.g. consecutive idents
 	}
 	// trailing newlines can cause issues with commas
 	exprStr := strings.TrimSpace(lbuf.String())

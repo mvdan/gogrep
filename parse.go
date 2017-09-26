@@ -90,7 +90,7 @@ func parse(src string) (ast.Node, error) {
 		// the best overall error message. Show positions
 		// relative to where the user's code is put in the
 		// template.
-		mainErr = subPosOffsets(err, posOffset{1, 1, 23})
+		mainErr = subPosOffsets(err, posOffset{1, 1, 22})
 	}
 
 	// type expressions as a last resort, for e.g. chans and interfaces

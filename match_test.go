@@ -26,12 +26,11 @@ func TestMatch(t *testing.T) {
 
 		// expr parse errors
 		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
-		{"{", "", parseErr("1:3: expected '}', found 'EOF'")},
+		{"{", "", parseErr("1:4: expected '}', found 'EOF'")},
 		{"$x)", "", parseErr("1:3: expected statement, found ')'")},
 		{"$x(", "", parseErr("1:5: expected operand, found '}'")},
-		{"$*x)", "", parseErr("1:3: expected statement, found ')'")},
-		// TODO: keep original spacings for good error positions
-		{"a\n$x)", "", parseErr("2:5: expected statement, found ')'")},
+		{"$*x)", "", parseErr("1:4: expected statement, found ')'")},
+		{"a\n$x)", "", parseErr("2:3: expected statement, found ')'")},
 
 		// basic lits
 		{"123", "123", 1},

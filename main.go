@@ -17,15 +17,17 @@ import (
 	"strings"
 )
 
+var recurse = flag.Bool("r", false, "match all dependencies recursively too")
+
 func main() {
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, `usage: gogrep pattern [pkg ...]
 
 A pattern is a Go expression or statement which may include wildcards.
 
-Example:
+  -r   match all dependencies recursively too
 
-	gogrep 'if $x != nil { return $x }'
+Example: gogrep 'if $x != nil { return $x }'
 `)
 	}
 	flag.Parse()
@@ -34,13 +36,14 @@ Example:
 		fmt.Fprintln(os.Stderr, "need at least one arg")
 		os.Exit(2)
 	}
-	if err := grepArgs(os.Stdout, &build.Default, args[0], args[1:]); err != nil {
+	err := grepArgs(os.Stdout, &build.Default, args[0], args[1:], *recurse)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string) error {
+func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recurse bool) error {
 	exprNode, typed, err := compileExpr(expr)
 	if err != nil {
 		return err
@@ -52,7 +55,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string) error
 	}
 	var all []ast.Node
 	if !typed {
-		nodes, err := loadUntyped(wd, ctx, fset, args)
+		nodes, err := loadUntyped(wd, ctx, fset, args, recurse)
 		if err != nil {
 			return err
 		}
@@ -64,6 +67,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string) error
 		if err != nil {
 			return err
 		}
+		// TODO: recursive mode
 		for _, pkg := range prog.InitialPackages() {
 			for _, file := range pkg.Files {
 				all = append(all, matches(exprNode, file)...)

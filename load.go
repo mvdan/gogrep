@@ -15,7 +15,7 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []string) ([]ast.Node, error) {
+func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []string, recurse bool) ([]ast.Node, error) {
 	gctx := gotool.Context{BuildContext: *ctx}
 	paths := gctx.ImportPaths(args)
 	var nodes []ast.Node
@@ -27,16 +27,16 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 		nodes = append(nodes, f)
 		return nil
 	}
-	for _, path := range paths {
-		if strings.HasSuffix(path, ".go") {
-			if err := addFile(path); err != nil {
-				return nil, err
-			}
-			continue
+	done := map[string]bool{}
+	var addPkg func(path string) error // to recurse into self
+	addPkg = func(path string) error {
+		if done[path] {
+			return nil
 		}
+		done[path] = true
 		pkg, err := ctx.Import(path, wd, 0)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for _, names := range [...][]string{
 			pkg.GoFiles, pkg.CgoFiles, pkg.IgnoredGoFiles,
@@ -45,9 +45,28 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 			for _, name := range names {
 				path := filepath.Join(pkg.Dir, name)
 				if err := addFile(path); err != nil {
-					return nil, err
+					return err
 				}
 			}
+		}
+		if recurse {
+			for _, path := range pkg.Imports {
+				if err := addPkg(path); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	for _, path := range paths {
+		if strings.HasSuffix(path, ".go") {
+			if err := addFile(path); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if err := addPkg(path); err != nil {
+			return nil, err
 		}
 	}
 	return nodes, nil

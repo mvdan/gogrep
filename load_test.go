@@ -16,32 +16,41 @@ func TestLoad(t *testing.T) {
 	ctx := build.Default
 	ctx.GOPATH = "testdata"
 	tests := []struct {
-		args []string
-		want interface{}
+		args    []string
+		recurse bool
+		want    interface{}
 	}{
 		{
-			[]string{"testdata/file1.go", "testdata/file2.go"},
+			[]string{"testdata/file1.go", "testdata/file2.go"}, false,
 			`
 				testdata/file1.go:3:1: const _ = "file1"
 				testdata/file2.go:3:1: const _ = "file2"
 			`,
 		},
 		{
-			[]string{"noexist.go"},
+			[]string{"noexist.go"}, false,
 			fmt.Errorf("no such file or directory"),
 		},
 		{
-			[]string{"./testdata"},
+			[]string{"./testdata"}, false,
 			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
 		},
 		{
-			[]string{"p1"},
+			[]string{"p1"}, false,
 			`
 				testdata/src/p1/file1.go:3:1: const _ = "file1"
 			`,
 		},
 		{
-			[]string{"p1/..."},
+			[]string{"p1/..."}, false,
+			`
+				testdata/src/p1/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
+			`,
+		},
+		{
+			[]string{"p1"}, true,
 			`
 				testdata/src/p1/file1.go:3:1: const _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
@@ -51,7 +60,7 @@ func TestLoad(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer
-		err := grepArgs(&buf, &ctx, expr, tc.args)
+		err := grepArgs(&buf, &ctx, expr, tc.args, tc.recurse)
 		switch x := tc.want.(type) {
 		case error:
 			if err == nil {

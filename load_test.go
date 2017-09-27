@@ -47,6 +47,8 @@ func TestLoad(t *testing.T) {
 				testdata/src/p1/file1.go:3:1: const _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
 				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
+				testdata/src/p1/p3/testp/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/testp/file1.go:3:1: const _ = "file1"
 			`,
 		},
 		{
@@ -55,6 +57,7 @@ func TestLoad(t *testing.T) {
 				testdata/src/p1/file1.go:3:1: const _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
 				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
+				testdata/src/p1/testp/file1.go:3:1: const _ = "file1"
 			`,
 		},
 	}

@@ -28,8 +28,8 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 		return nil
 	}
 	done := map[string]bool{}
-	var addPkg func(path string) error // to recurse into self
-	addPkg = func(path string) error {
+	var addPkg func(path string, direct bool) error // to recurse into self
+	addPkg = func(path string, direct bool) error {
 		if done[path] {
 			return nil
 		}
@@ -49,11 +49,17 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 				}
 			}
 		}
-		if recurse {
-			for _, path := range pkg.Imports {
-				if err := addPkg(path); err != nil {
-					return err
-				}
+		if !recurse {
+			return nil
+		}
+		imports := pkg.Imports
+		if direct {
+			imports = append(imports, pkg.TestImports...)
+			imports = append(imports, pkg.XTestImports...)
+		}
+		for _, path := range imports {
+			if err := addPkg(path, false); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -65,7 +71,7 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 			}
 			continue
 		}
-		if err := addPkg(path); err != nil {
+		if err := addPkg(path, true); err != nil {
 			return nil, err
 		}
 	}

@@ -54,8 +54,9 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		return err
 	}
 	var all []ast.Node
+	loader := nodeLoader{wd, ctx, fset}
 	if !typed {
-		nodes, err := loadUntyped(wd, ctx, fset, args, recurse)
+		nodes, err := loader.untyped(args, recurse)
 		if err != nil {
 			return err
 		}
@@ -63,7 +64,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 			all = append(all, matches(exprNode, node)...)
 		}
 	} else {
-		prog, err := loadTyped(wd, ctx, fset, args)
+		prog, err := loader.typed(args, recurse)
 		if err != nil {
 			return err
 		}
@@ -75,7 +76,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		}
 	}
 	for _, n := range all {
-		fpos := fset.Position(n.Pos())
+		fpos := loader.fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
 		}

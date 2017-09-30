@@ -15,12 +15,18 @@ import (
 	"golang.org/x/tools/go/loader"
 )
 
-func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []string, recurse bool) ([]ast.Node, error) {
-	gctx := gotool.Context{BuildContext: *ctx}
+type nodeLoader struct {
+	wd   string
+	ctx  *build.Context
+	fset *token.FileSet
+}
+
+func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
+	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
 	var nodes []ast.Node
 	addFile := func(path string) error {
-		f, err := parser.ParseFile(fset, path, nil, 0)
+		f, err := parser.ParseFile(l.fset, path, nil, 0)
 		if err != nil {
 			return err
 		}
@@ -34,7 +40,7 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 			return nil
 		}
 		done[path] = true
-		pkg, err := ctx.Import(path, wd, 0)
+		pkg, err := l.ctx.Import(path, l.wd, 0)
 		if err != nil {
 			return err
 		}
@@ -78,10 +84,10 @@ func loadUntyped(wd string, ctx *build.Context, fset *token.FileSet, args []stri
 	return nodes, nil
 }
 
-func loadTyped(wd string, ctx *build.Context, fset *token.FileSet, args []string) (*loader.Program, error) {
-	gctx := gotool.Context{BuildContext: *ctx}
+func (l nodeLoader) typed(args []string, recurse bool) (*loader.Program, error) {
+	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
-	conf := loader.Config{Fset: fset, Cwd: wd, Build: ctx}
+	conf := loader.Config{Fset: l.fset, Cwd: l.wd, Build: l.ctx}
 	if _, err := conf.FromArgs(paths, true); err != nil {
 		return nil, err
 	}

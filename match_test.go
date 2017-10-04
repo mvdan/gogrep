@@ -11,9 +11,8 @@ import (
 
 type wantErr string
 
-func parseErr(msg string) wantErr {
-	return wantErr("cannot parse expr: " + msg)
-}
+func tokErr(msg string) wantErr   { return wantErr("cannot tokenize expr: " + msg) }
+func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) }
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
@@ -21,8 +20,8 @@ func TestMatch(t *testing.T) {
 		anyWant   interface{}
 	}{
 		// expr tokenize errors
-		{"$", "", parseErr("1:2: $ must be followed by ident, got EOF")},
-		{`"`, "", parseErr("1:1: string literal not terminated")},
+		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
+		{`"`, "", tokErr("1:1: string literal not terminated")},
 
 		// expr parse errors
 		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
@@ -249,6 +248,11 @@ func TestMatch(t *testing.T) {
 
 		// TODO select statement
 		// TODO communication clause
+
+		// aggressive mode
+		{"for range $x {}", "for _ = range a {}", 0},
+		{"~ for range $x {}", "for _ = range a {}", 1},
+		{"~ for _ = range $x {}", "for range a {}", 1},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
@@ -258,7 +262,7 @@ func TestMatch(t *testing.T) {
 }
 
 func grepStrs(expr, src string) ([]ast.Node, error) {
-	exprNode, _, err := compileExpr(expr)
+	exprNode, aggressive, _, err := compileExpr(expr)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +270,7 @@ func grepStrs(expr, src string) ([]ast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return matches(exprNode, srcNode), nil
+	return matches(exprNode, srcNode, aggressive), nil
 }
 
 func grepTest(t *testing.T, expr, src string, anyWant interface{}) {

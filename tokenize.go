@@ -13,6 +13,7 @@ const (
 	_ token.Token = -iota
 	tokWild
 	tokWildAny
+	tokAggressive
 )
 
 type fullToken struct {
@@ -30,6 +31,7 @@ func tokenize(src string) ([]fullToken, error) {
 	onError := func(pos token.Position, msg string) {
 		switch msg { // allow certain extra chars
 		case `illegal character U+0024 '$'`:
+		case `illegal character U+007E '~'`:
 		default:
 			err = fmt.Errorf("%v: %s", pos, msg)
 		}
@@ -55,15 +57,14 @@ func tokenize(src string) ([]fullToken, error) {
 	}
 
 	var toks []fullToken
-	t := next()
-	for {
-		if t.tok == token.EOF {
-			break
-		}
-		if t.tok != token.ILLEGAL || t.lit != "$" {
-			// regular Go code
+	for t := next(); t.tok != token.EOF; t = next() {
+		switch t.lit {
+		case "$": // continues below
+		case "~":
+			toks = append(toks, fullToken{t.pos, tokAggressive, ""})
+			continue
+		default: // regular Go code
 			toks = append(toks, t)
-			t = next()
 			continue
 		}
 		wt := fullToken{t.pos, tokWild, ""}
@@ -78,7 +79,6 @@ func tokenize(src string) ([]fullToken, error) {
 			break
 		}
 		wt.lit = t.lit
-		t = next()
 		toks = append(toks, wt)
 	}
 	return toks, err

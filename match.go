@@ -10,10 +10,10 @@ import (
 	"strings"
 )
 
-func matches(exprNode, node ast.Node) []ast.Node {
+func matches(exprNode, node ast.Node, aggressive bool) []ast.Node {
 	var matches []ast.Node
 	match := func(exprNode, node ast.Node) {
-		m := matcher{values: map[string]ast.Node{}}
+		m := matcher{values: map[string]ast.Node{}, aggressive: aggressive}
 		if m.node(exprNode, node) {
 			matches = append(matches, node)
 		}
@@ -60,14 +60,28 @@ func matches(exprNode, node ast.Node) []ast.Node {
 }
 
 type matcher struct {
-	values map[string]ast.Node
+	values     map[string]ast.Node
+	aggressive bool
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {
-	if expr == nil || node == nil {
-		return expr == node
+	if !m.aggressive {
+		if expr == nil || node == nil {
+			return expr == node
+		}
+	} else {
+		if expr == nil && node == nil {
+			return true
+		}
+		if node == nil {
+			expr, node = node, expr
+		}
 	}
 	switch x := expr.(type) {
+	case nil: // only in aggressive mode
+		y, ok := node.(*ast.Ident)
+		return ok && y.Name == "_"
+
 	case *ast.File:
 		y, ok := node.(*ast.File)
 		if !ok || !m.node(x.Name, y.Name) || len(x.Decls) != len(y.Decls) ||

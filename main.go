@@ -44,7 +44,7 @@ Example: gogrep 'if $x != nil { return $x }'
 }
 
 func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recurse bool) error {
-	exprNode, typed, err := compileExpr(expr)
+	exprNode, aggressive, typed, err := compileExpr(expr)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 			return err
 		}
 		for _, node := range nodes {
-			all = append(all, matches(exprNode, node)...)
+			all = append(all, matches(exprNode, node, aggressive)...)
 		}
 	} else {
 		prog, err := loader.typed(args, recurse)
@@ -71,7 +71,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		// TODO: recursive mode
 		for _, pkg := range prog.InitialPackages() {
 			for _, file := range pkg.Files {
-				all = append(all, matches(exprNode, file)...)
+				all = append(all, matches(exprNode, file, aggressive)...)
 			}
 		}
 	}
@@ -159,10 +159,10 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 	return l.Buffer.WriteString(s)
 }
 
-func compileExpr(expr string) (node ast.Node, typed bool, err error) {
+func compileExpr(expr string) (node ast.Node, aggressive, typed bool, err error) {
 	toks, err := tokenize(expr)
 	if err != nil {
-		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
+		return nil, false, false, fmt.Errorf("cannot tokenize expr: %v", err)
 	}
 	var offs []posOffset
 	lbuf := lineColBuffer{line: 1, col: 1}
@@ -172,6 +172,10 @@ func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 			atCol:  lbuf.col,
 			offset: length,
 		})
+	}
+	if len(toks) > 0 && toks[0].tok == tokAggressive {
+		toks = toks[1:]
+		aggressive = true
 	}
 	for _, t := range toks {
 		for lbuf.offs < t.pos.Offset {
@@ -198,7 +202,7 @@ func compileExpr(expr string) (node ast.Node, typed bool, err error) {
 	exprStr := strings.TrimSpace(lbuf.String())
 	if node, err = parse(exprStr); err != nil {
 		err = subPosOffsets(err, offs...)
-		return nil, false, fmt.Errorf("cannot parse expr: %v", err)
+		return nil, false, false, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	return node, typed, nil
+	return node, aggressive, typed, nil
 }

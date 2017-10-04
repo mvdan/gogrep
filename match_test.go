@@ -255,6 +255,8 @@ func TestMatch(t *testing.T) {
 		{"~ for _ = range $x {}", "for range a {}", 1},
 		{"var a int", "var (a, b int; c bool)", 0},
 		{"~ var a int", "var (a, b int; c bool)", 1},
+		{"{ x; }", "switch { case true: x; }", 0},
+		{"~ { x; }", "switch { case true: x; }", 1},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {

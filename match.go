@@ -278,6 +278,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.BranchStmt)
 		return ok && x.Tok == y.Tok && m.node(maybeNilIdent(x.Label), maybeNilIdent(y.Label))
 	case *ast.BlockStmt:
+		if m.aggressive && m.node(stmtList(x.List), node) {
+			return true
+		}
 		y, ok := node.(*ast.BlockStmt)
 		return ok && m.stmts(x.List, y.List)
 	case *ast.IfStmt:

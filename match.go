@@ -209,6 +209,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 
 	// decls
 	case *ast.GenDecl:
+		if m.aggressive && len(x.Specs) == 1 && m.node(x.Specs[0], node) {
+			return true
+		}
 		y, ok := node.(*ast.GenDecl)
 		return ok && x.Tok == y.Tok && m.specs(x.Specs, y.Specs)
 	case *ast.FuncDecl:
@@ -219,8 +222,18 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	// specs
 	case *ast.ValueSpec:
 		y, ok := node.(*ast.ValueSpec)
-		return ok && m.idents(x.Names, y.Names) &&
-			m.node(x.Type, y.Type) && m.exprs(x.Values, y.Values)
+		if !ok || !m.node(x.Type, y.Type) {
+			return false
+		}
+		if m.aggressive && len(x.Names) == 1 {
+			for i := range y.Names {
+				if m.node(x.Names[i], y.Names[i]) &&
+					(x.Values == nil || m.node(x.Values[i], y.Values[i])) {
+					return true
+				}
+			}
+		}
+		return m.idents(x.Names, y.Names) && m.exprs(x.Values, y.Values)
 
 	// stmt bridge nodes
 	case *ast.ExprStmt:

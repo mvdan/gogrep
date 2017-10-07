@@ -398,6 +398,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 				// let "b; c" match "a; b; c"
 				// (simulates a $*_ at the beginning)
 				next2 = i2 + 1
+				backupMatches()
 			}
 			if i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)) {
 				wildName = ""

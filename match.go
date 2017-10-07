@@ -19,7 +19,15 @@ func matches(exprNode, node ast.Node, aggressive bool) []ast.Node {
 		}
 		m := matcher{values: map[string]ast.Node{}, aggressive: aggressive}
 		posRange := [2]token.Pos{node.Pos(), node.End()}
-		if m.node(exprNode, node) && !seen[posRange] {
+		found := false
+		sts1, ok1 := exprNode.(stmtList)
+		sts2, ok2 := node.(stmtList)
+		if ok1 && ok2 {
+			found = m.nodes(sts1, sts2, true)
+		} else {
+			found = m.node(exprNode, node)
+		}
+		if found && !seen[posRange] {
 			matches = append(matches, node)
 			seen[posRange] = true
 		}
@@ -327,7 +335,7 @@ type nodeList interface {
 
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
-func (m *matcher) nodes(ns1, ns2 nodeList) bool {
+func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 	ns1len, ns2len := ns1.len(), ns2.len()
 	if ns1len == 0 {
 		return ns2len == 0
@@ -386,7 +394,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				i1++
 				continue
 			}
-			if _, ok := ns1.(stmtList); ok && i1 == 0 {
+			if partial && i1 == 0 {
 				// let "b; c" match "a; b; c"
 				// (simulates a $*_ at the beginning)
 				next2 = i2 + 1
@@ -399,7 +407,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 				continue
 			}
 		}
-		if _, ok := ns1.(stmtList); ok && i1 == ns1len {
+		if partial && i1 == ns1len {
 			break // let "b; c" match "b; c; d"
 		}
 		// mismatch, try to restart
@@ -418,19 +426,19 @@ func (m *matcher) nodes(ns1, ns2 nodeList) bool {
 }
 
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	return m.nodes(exprList(exprs1), exprList(exprs2))
+	return m.nodes(exprList(exprs1), exprList(exprs2), false)
 }
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	return m.nodes(identList(ids1), identList(ids2))
+	return m.nodes(identList(ids1), identList(ids2), false)
 }
 
 func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	return m.nodes(stmtList(stmts1), stmtList(stmts2))
+	return m.nodes(stmtList(stmts1), stmtList(stmts2), false)
 }
 
 func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	return m.nodes(specList(specs1), specList(specs2))
+	return m.nodes(specList(specs1), specList(specs2), false)
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {

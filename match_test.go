@@ -44,14 +44,14 @@ func TestMatch(t *testing.T) {
 		// recursion
 		{"$x", "a + b", 3},
 		{"$x + $x", "foo(a + a, b + b)", 2},
-		{"$x", "var a int", 5},
+		{"$x", "var a int", 4},
 		{"go foo()", "a(); go foo(); a()", 1},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},
 		{"$x, $y", "1", 0},
 		{"$x", "a, b", 3},
-		{"b, c", "a, b, c, d", 1},
+		{"b, c", "a, b, c, d", 0},
 		{"b, c", "foo(a, b, c, d)", 0},
 		{"print($*_, $x)", "print(a, b, c)", 1},
 
@@ -143,9 +143,14 @@ func TestMatch(t *testing.T) {
 		// many statements
 		{"$x(); $y()", "a(); b()", 1},
 		{"$x(); $y()", "a()", 0},
-		{"$x", "a; b", 5},
+		{"$x", "a; b", 3},
+		{"b; c", "b", 0},
+		{"b; c", "b; c", 1},
+		{"b; c", "b; x; c", 0},
 		{"b; c", "a; b; c; d", 1},
-		{"b; c", "{a; b; c; d}", 0},
+		{"b; c", "{b; c; d}", 1},
+		{"b; c", "{a; b; c}", 1},
+		{"b; c", "{b; b; c; c}", 1},
 		{"$*_; b; $*_", "{a; b; c; d}", 1},
 		{"{$*_; $x}", "{a; b; c}", 1},
 

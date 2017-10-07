@@ -18,17 +18,20 @@ func matches(exprNode, node ast.Node, aggressive bool) []ast.Node {
 			return
 		}
 		m := matcher{values: map[string]ast.Node{}, aggressive: aggressive}
-		posRange := [2]token.Pos{node.Pos(), node.End()}
-		found := false
+		var found ast.Node
 		sts1, ok1 := exprNode.(stmtList)
 		sts2, ok2 := node.(stmtList)
 		if ok1 && ok2 {
 			found = m.nodes(sts1, sts2, true)
-		} else {
-			found = m.node(exprNode, node)
+		} else if m.node(exprNode, node) {
+			found = node
 		}
-		if found && !seen[posRange] {
-			matches = append(matches, node)
+		if found == nil {
+			return
+		}
+		posRange := [2]token.Pos{found.Pos(), found.End()}
+		if !seen[posRange] {
+			matches = append(matches, found)
 			seen[posRange] = true
 		}
 	}
@@ -335,10 +338,13 @@ type nodeList interface {
 
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
-func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
+func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 	ns1len, ns2len := ns1.len(), ns2.len()
 	if ns1len == 0 {
-		return ns2len == 0
+		if ns2len == 0 {
+			return ns2
+		}
+		return nil
 	}
 	// We need to keep a copy of m.values so that we can restart
 	// with a different "any of" match while discarding any matches
@@ -352,6 +358,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 	}
 	backupMatches()
 
+	partialStart, partialEnd := 0, ns2len
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
 	wildName := ""
@@ -398,6 +405,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 				// let "b; c" match "a; b; c"
 				// (simulates a $*_ at the beginning)
 				next2 = i2 + 1
+				partialStart = i2
 				backupMatches()
 			}
 			if i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)) {
@@ -408,7 +416,8 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 				continue
 			}
 		}
-		if partial && i1 == ns1len {
+		if partial && i1 == ns1len && wildName == "" {
+			partialEnd = i2
 			break // let "b; c" match "b; c; d"
 		}
 		// mismatch, try to restart
@@ -418,28 +427,28 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) bool {
 			m.values = oldMatches
 			continue
 		}
-		return false
+		return nil
 	}
 	if !wouldMatch() {
-		return false
+		return nil
 	}
-	return true
+	return ns2.slice(partialStart, partialEnd)
 }
 
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	return m.nodes(exprList(exprs1), exprList(exprs2), false)
+	return m.nodes(exprList(exprs1), exprList(exprs2), false) != nil
 }
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	return m.nodes(identList(ids1), identList(ids2), false)
+	return m.nodes(identList(ids1), identList(ids2), false) != nil
 }
 
 func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	return m.nodes(stmtList(stmts1), stmtList(stmts2), false)
+	return m.nodes(stmtList(stmts1), stmtList(stmts2), false) != nil
 }
 
 func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	return m.nodes(specList(specs1), specList(specs2), false)
+	return m.nodes(specList(specs1), specList(specs2), false) != nil
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {

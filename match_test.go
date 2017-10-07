@@ -147,12 +147,12 @@ func TestMatch(t *testing.T) {
 		{"b; c", "b", 0},
 		{"b; c", "b; c", 1},
 		{"b; c", "b; x; c", 0},
-		{"b; c", "a; b; c; d", 1},
+		{"b; c", "a; b; c; d", "b; c"},
 		{"b; c", "{b; c; d}", 1},
 		{"b; c", "{a; b; c}", 1},
-		{"b; c", "{b; b; c; c}", 1},
-		{"$x++; $x--", "n; a++; b++; b--", 1},
-		{"$*_; b; $*_", "{a; b; c; d}", 1},
+		{"b; c", "{b; b; c; c}", "b; c"},
+		{"$x++; $x--", "n; a++; b++; b--", "b++; b--"},
+		{"$*_; b; $*_", "{a; b; c; d}", "a; b; c; d"},
 		{"{$*_; $x}", "{a; b; c}", 1},
 		{"{b; c}", "{a; b; c}", 0},
 
@@ -303,6 +303,18 @@ func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 		}
 		if len(matches) != want {
 			terr("wanted %d matches, got %d", want, len(matches))
+		}
+	case string:
+		if err != nil {
+			terr("unexpected error: %v", err)
+			return
+		}
+		if len(matches) != 1 {
+			terr("wanted 1 match, got %d", len(matches))
+		}
+		got := singleLinePrint(matches[0])
+		if got != want {
+			terr("wanted %q match, got %q", want, got)
 		}
 	default:
 		panic(fmt.Sprintf("unexpected anyWant type: %T", anyWant))

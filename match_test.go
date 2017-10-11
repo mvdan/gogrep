@@ -40,6 +40,7 @@ func TestMatch(t *testing.T) {
 		{"foo($x, $x)", "foo(1, 2)", 0},
 		{"foo($_, $_)", "foo(1, 2)", 1},
 		{"foo($x, $y, $y)", "foo(1, 2, 2)", 1},
+		{"$(x)", `"foo"`, 1},
 
 		// recursion
 		{"$x", "a + b", 3},

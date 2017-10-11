@@ -69,6 +69,10 @@ func tokenize(src string) ([]fullToken, error) {
 		}
 		wt := fullToken{t.pos, tokWild, ""}
 		t = next()
+		paren := false
+		if paren = t.tok == token.LPAREN; paren {
+			t = next()
+		}
 		if t.tok == token.MUL {
 			wt.tok = tokWildAny
 			t = next()
@@ -79,6 +83,13 @@ func tokenize(src string) ([]fullToken, error) {
 			break
 		}
 		wt.lit = t.lit
+		if paren {
+			if t = next(); t.tok != token.RPAREN {
+				err = fmt.Errorf("%v: expected ) to close $(",
+					t.pos)
+				break
+			}
+		}
 		toks = append(toks, wt)
 	}
 	return toks, err

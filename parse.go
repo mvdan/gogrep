@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/scanner"
@@ -49,6 +50,12 @@ func noBadNodes(node ast.Node) bool {
 
 func parse(src string) (ast.Node, error) {
 	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(src))
+	scan := scanner.Scanner{}
+	scan.Init(file, []byte(src), nil, 0)
+	if _, tok, _ := scan.Scan(); tok == token.EOF {
+		return nil, fmt.Errorf("empty source code")
+	}
 	var mainErr error
 
 	// first try as a whole file

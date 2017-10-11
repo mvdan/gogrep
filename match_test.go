@@ -22,6 +22,8 @@ func TestMatch(t *testing.T) {
 		// expr tokenize errors
 		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
 		{`"`, "", tokErr("1:1: string literal not terminated")},
+		{"", "", parseErr("empty source code")},
+		{"\t", "", parseErr("empty source code")},
 
 		// expr parse errors
 		{"foo)", "", parseErr("1:4: expected statement, found ')'")},

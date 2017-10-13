@@ -38,22 +38,9 @@ func tokenize(src string) ([]fullToken, error) {
 	}
 	s.Init(file, []byte(src), onError, scanner.ScanComments)
 
-	var remaining []fullToken
-	for {
-		pos, tok, lit := s.Scan()
-		if err != nil {
-			return nil, err
-		}
-		remaining = append(remaining, fullToken{fset.Position(pos), tok, lit})
-		if tok == token.EOF {
-			// remaining has a trailing token.EOF
-			break
-		}
-	}
 	next := func() fullToken {
-		t := remaining[0]
-		remaining = remaining[1:]
-		return t
+		pos, tok, lit := s.Scan()
+		return fullToken{fset.Position(pos), tok, lit}
 	}
 
 	var toks []fullToken

@@ -24,6 +24,8 @@ func TestMatch(t *testing.T) {
 		{`"`, "", tokErr("1:1: string literal not terminated")},
 		{"", "", parseErr("empty source code")},
 		{"\t", "", parseErr("empty source code")},
+		{"$(x", "", tokErr("1:4: expected ) to close $(")},
+		{"$(x /expr", "", tokErr("1:5: expected / to terminate regex")},
 
 		// expr parse errors
 		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
@@ -49,6 +51,13 @@ func TestMatch(t *testing.T) {
 		{"$x + $x", "foo(a + a, b + b)", 2},
 		{"$x", "var a int", 4},
 		{"go foo()", "a(); go foo(); a()", 1},
+
+		// ident regex matches
+		//{"$(x /foo/)", "bar", 0},
+		//{"$(x /foo/)", "foo", 1},
+		//{"$(x /foo/)", "_foo", 0},
+		//{"$(x /foo/)", "foo_", 0},
+		//{"$(x /.*foo.*/)", "_foo_", 1},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},

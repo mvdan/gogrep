@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"strings"
 )
 
 const (
@@ -36,7 +37,11 @@ func tokenize(src string) ([]fullToken, error) {
 			err = fmt.Errorf("%v: %s", pos, msg)
 		}
 	}
-	s.Init(file, []byte(src), onError, scanner.ScanComments)
+
+	// we will modify the input source under the scanner's nose to
+	// enable some features such as regexes.
+	scanSrc := []byte(src)
+	s.Init(file, scanSrc, onError, scanner.ScanComments)
 
 	next := func() fullToken {
 		pos, tok, lit := s.Scan()
@@ -71,7 +76,31 @@ func tokenize(src string) ([]fullToken, error) {
 		}
 		wt.lit = t.lit
 		if paren {
-			if t = next(); t.tok != token.RPAREN {
+			t = next()
+			if t.tok == token.QUO {
+				start := t.pos.Offset + 1
+				rxStr := string(src[start:])
+				end := strings.Index(rxStr, "/")
+				if end < 0 {
+					err = fmt.Errorf("%v: expected / to terminate regex",
+						t.pos)
+					break
+				}
+				rxStr = rxStr[:end]
+				for i := start; i < start+end; i++ {
+					scanSrc[i] = ' '
+				}
+				t = next() // skip opening /
+				if t.tok != token.QUO {
+					// skip any following token, as
+					// go/scanner retains one char
+					// for its next token.
+					t = next()
+				}
+				t = next() // skip closing /
+				// TODO: pass rxStr on and use it
+			}
+			if t.tok != token.RPAREN {
 				err = fmt.Errorf("%v: expected ) to close $(",
 					t.pos)
 				break

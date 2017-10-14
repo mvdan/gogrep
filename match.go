@@ -284,7 +284,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return true
 		}
 		y, ok := node.(*ast.BlockStmt)
-		return ok && m.stmts(x.List, y.List)
+		return ok && (m.cases(x.List, y.List) || m.stmts(x.List, y.List))
 	case *ast.IfStmt:
 		y, ok := node.(*ast.IfStmt)
 		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
@@ -442,6 +442,27 @@ func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
 	return m.nodes(identList(ids1), identList(ids2), false) != nil
+}
+
+func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
+	for _, stmt := range stmts2 {
+		if _, ok := stmt.(*ast.CaseClause); !ok {
+			return false
+		}
+	}
+	var left []*ast.Ident
+	for _, stmt := range stmts1 {
+		cc, ok := stmt.(*ast.CaseClause)
+		if !ok || len(cc.List) != 1 || len(cc.Body) != 0 {
+			return false
+		}
+		id, ok := cc.List[0].(*ast.Ident)
+		if !ok || !isWildName(id.Name) {
+			return false
+		}
+		left = append(left, id)
+	}
+	return m.nodes(identList(left), stmtList(stmts2), false) != nil
 }
 
 func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {

@@ -51,6 +51,8 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		return fullToken{fset.Position(pos), tok, lit}
 	}
 
+	asCase := false
+
 	var toks []fullToken
 	for t := next(); t.tok != token.EOF; t = next() {
 		switch t.lit {
@@ -58,6 +60,9 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		case "~":
 			toks = append(toks, fullToken{t.pos, tokAggressive, ""})
 			continue
+		case "switch", "case":
+			asCase = t.lit != "case"
+			fallthrough
 		default: // regular Go code
 			toks = append(toks, t)
 			continue
@@ -123,7 +128,13 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 			}
 		}
 		m.vars = append(m.vars, info)
+		if asCase {
+			toks = append(toks, fullToken{wt.pos, token.IDENT, "case"})
+		}
 		toks = append(toks, wt)
+		if asCase {
+			toks = append(toks, fullToken{wt.pos, token.COLON, ""})
+		}
 	}
 	return toks, err
 }

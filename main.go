@@ -210,12 +210,17 @@ func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
 		toks = toks[1:]
 		m.aggressive = true
 	}
+	lastLit := false
 	for _, t := range toks {
+		if lbuf.offs >= t.pos.Offset && lastLit && t.lit != "" {
+			lbuf.WriteString(" ")
+		}
 		for lbuf.offs < t.pos.Offset {
 			lbuf.WriteString(" ")
 		}
 		if t.lit == "" {
 			lbuf.WriteString(t.tok.String())
+			lastLit = false
 			continue
 		}
 		if isWildName(t.lit) {
@@ -224,6 +229,7 @@ func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
 			addOffset(len(wildPrefix) - 1)
 		}
 		lbuf.WriteString(t.lit)
+		lastLit = strings.TrimSpace(t.lit) != ""
 	}
 	// trailing newlines can cause issues with commas
 	exprStr := strings.TrimSpace(lbuf.String())

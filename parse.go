@@ -100,7 +100,7 @@ func parse(src string) (ast.Node, error) {
 		mainErr = subPosOffsets(err, posOffset{1, 1, 22})
 	}
 
-	// type expressions as a last resort, for e.g. chans and interfaces
+	// type expressions not yet picked up, for e.g. chans and interfaces
 	asType := execTmpl(tmplType, src)
 	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)

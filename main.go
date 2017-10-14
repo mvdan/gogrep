@@ -36,15 +36,46 @@ Example: gogrep 'if $x != nil { return $x }'
 		fmt.Fprintln(os.Stderr, "need at least one arg")
 		os.Exit(2)
 	}
-	err := grepArgs(os.Stdout, &build.Default, args[0], args[1:], *recurse)
+	m := matcher{
+		out: os.Stdout,
+		ctx: &build.Default,
+	}
+	err := m.fromArgs(args[0], args[1:], *recurse)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recurse bool) error {
-	exprNode, aggressive, typed, err := compileExpr(expr)
+type matcher struct {
+	out io.Writer
+	ctx *build.Context
+
+	typed, aggressive bool
+
+	// information about variables (wildcards), by id (which is an
+	// integer starting at 0)
+	vars []varInfo
+
+	// node values recorded by name, excluding "_" (used only by the
+	// actual matching phase)
+	values map[string]ast.Node
+}
+
+type varInfo struct {
+	name string
+	any  bool
+}
+
+func (m *matcher) info(id int) varInfo {
+	if id < 0 {
+		return varInfo{}
+	}
+	return m.vars[id]
+}
+
+func (m *matcher) fromArgs(expr string, args []string, recurse bool) error {
+	exprNode, err := m.compileExpr(expr)
 	if err != nil {
 		return err
 	}
@@ -54,14 +85,14 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		return err
 	}
 	var all []ast.Node
-	loader := nodeLoader{wd, ctx, fset}
-	if !typed {
+	loader := nodeLoader{wd, m.ctx, fset}
+	if !m.typed {
 		nodes, err := loader.untyped(args, recurse)
 		if err != nil {
 			return err
 		}
 		for _, node := range nodes {
-			all = append(all, matches(exprNode, node, aggressive)...)
+			all = append(all, m.matches(exprNode, node)...)
 		}
 	} else {
 		prog, err := loader.typed(args, recurse)
@@ -71,7 +102,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		// TODO: recursive mode
 		for _, pkg := range prog.InitialPackages() {
 			for _, file := range pkg.Files {
-				all = append(all, matches(exprNode, file, aggressive)...)
+				all = append(all, m.matches(exprNode, file)...)
 			}
 		}
 	}
@@ -80,7 +111,7 @@ func grepArgs(w io.Writer, ctx *build.Context, expr string, args []string, recur
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
 		}
-		fmt.Fprintf(w, "%v: %s\n", fpos, singleLinePrint(n))
+		fmt.Fprintf(m.out, "%v: %s\n", fpos, singleLinePrint(n))
 	}
 	return nil
 }
@@ -159,14 +190,15 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 	return l.Buffer.WriteString(s)
 }
 
-func compileExpr(expr string) (node ast.Node, aggressive, typed bool, err error) {
-	toks, err := tokenize(expr)
+func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
+	toks, err := m.tokenize(expr)
 	if err != nil {
-		return nil, false, false, fmt.Errorf("cannot tokenize expr: %v", err)
+		return nil, fmt.Errorf("cannot tokenize expr: %v", err)
 	}
 	var offs []posOffset
 	lbuf := lineColBuffer{line: 1, col: 1}
 	addOffset := func(length int) {
+		lbuf.offs -= length
 		offs = append(offs, posOffset{
 			atLine: lbuf.line,
 			atCol:  lbuf.col,
@@ -175,34 +207,28 @@ func compileExpr(expr string) (node ast.Node, aggressive, typed bool, err error)
 	}
 	if len(toks) > 0 && toks[0].tok == tokAggressive {
 		toks = toks[1:]
-		aggressive = true
+		m.aggressive = true
 	}
 	for _, t := range toks {
 		for lbuf.offs < t.pos.Offset {
 			lbuf.WriteString(" ")
 		}
-		var s string
-		switch {
-		case t.tok == tokWild:
-			s = wildPrefix + t.lit
-			lbuf.offs -= len(wildPrefix) - 1
-			addOffset(len(wildPrefix) - 1) // -1 for the $
-		case t.tok == tokWildAny:
-			s = wildPrefix + wildExtraAny + t.lit
-			lbuf.offs -= len(wildPrefix+wildExtraAny) - 1
-			addOffset(len(wildPrefix+wildExtraAny) - 1) // -1 for the $
-		case t.lit != "":
-			s = t.lit
-		default:
-			s = t.tok.String()
+		if t.lit == "" {
+			lbuf.WriteString(t.tok.String())
+			continue
 		}
-		lbuf.WriteString(s)
+		if isWildName(t.lit) {
+			// to correct the position offsets for the extra
+			// info attached to ident name strings
+			addOffset(len(wildPrefix) - 1)
+		}
+		lbuf.WriteString(t.lit)
 	}
 	// trailing newlines can cause issues with commas
 	exprStr := strings.TrimSpace(lbuf.String())
 	if node, err = parse(exprStr); err != nil {
 		err = subPosOffsets(err, offs...)
-		return nil, false, false, fmt.Errorf("cannot parse expr: %v", err)
+		return nil, fmt.Errorf("cannot parse expr: %v", err)
 	}
-	return node, aggressive, typed, nil
+	return node, nil
 }

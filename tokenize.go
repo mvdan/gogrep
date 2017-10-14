@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"strconv"
 	"strings"
 )
 
@@ -23,7 +24,8 @@ type fullToken struct {
 	lit string
 }
 
-func tokenize(src string) ([]fullToken, error) {
+func (m *matcher) tokenize(src string) ([]fullToken, error) {
+	m.vars = m.vars[:0]
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))
@@ -59,22 +61,26 @@ func tokenize(src string) ([]fullToken, error) {
 			toks = append(toks, t)
 			continue
 		}
-		wt := fullToken{t.pos, tokWild, ""}
+		wt := fullToken{t.pos, t.tok, wildPrefix}
 		t = next()
 		paren := false
 		if paren = t.tok == token.LPAREN; paren {
 			t = next()
 		}
+		var info varInfo
 		if t.tok == token.MUL {
-			wt.tok = tokWildAny
 			t = next()
+			info.any = true
 		}
 		if t.tok != token.IDENT {
 			err = fmt.Errorf("%v: $ must be followed by ident, got %v",
 				t.pos, t.tok)
 			break
 		}
-		wt.lit = t.lit
+		id := len(m.vars)
+		wt.lit += strconv.Itoa(id)
+		info.name = t.lit
+		m.vars = append(m.vars, info)
 		if paren {
 			t = next()
 			if t.tok == token.QUO {
@@ -109,4 +115,22 @@ func tokenize(src string) ([]fullToken, error) {
 		toks = append(toks, wt)
 	}
 	return toks, err
+}
+
+// using a prefix is good enough for now
+const wildPrefix = "gogrep_"
+
+func isWildName(name string) bool {
+	return strings.HasPrefix(name, wildPrefix)
+}
+
+func fromWildName(s string) int {
+	if !isWildName(s) {
+		return -1
+	}
+	n, err := strconv.Atoi(s[len(wildPrefix):])
+	if err != nil {
+		panic(err)
+	}
+	return n
 }

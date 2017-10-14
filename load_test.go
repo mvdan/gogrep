@@ -15,6 +15,7 @@ func TestLoad(t *testing.T) {
 	const expr = "const _ = $x"
 	ctx := build.Default
 	ctx.GOPATH = "testdata"
+	m := matcher{ctx: &ctx}
 	tests := []struct {
 		args    []string
 		recurse bool
@@ -63,7 +64,8 @@ func TestLoad(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer
-		err := grepArgs(&buf, &ctx, expr, tc.args, tc.recurse)
+		m.out = &buf
+		err := m.fromArgs(expr, tc.args, tc.recurse)
 		switch x := tc.want.(type) {
 		case error:
 			if err == nil {

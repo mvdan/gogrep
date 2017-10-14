@@ -7,17 +7,16 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"strings"
 )
 
-func matches(exprNode, node ast.Node, aggressive bool) []ast.Node {
+func (m *matcher) matches(exprNode, node ast.Node) []ast.Node {
 	var matches []ast.Node
 	seen := map[[2]token.Pos]bool{}
 	match := func(exprNode, node ast.Node) {
 		if node == nil {
 			return
 		}
-		m := matcher{values: map[string]ast.Node{}, aggressive: aggressive}
+		m.values = map[string]ast.Node{}
 		var found ast.Node
 		sts1, ok1 := exprNode.(stmtList)
 		sts2, ok2 := node.(stmtList)
@@ -59,11 +58,6 @@ func matches(exprNode, node ast.Node, aggressive bool) []ast.Node {
 		ast.Inspect(node, visit)
 	}
 	return matches
-}
-
-type matcher struct {
-	values     map[string]ast.Node
-	aggressive bool
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {
@@ -111,18 +105,19 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if _, ok := node.(ast.Node); !ok {
 			return false // to not include our extra node types
 		}
-		name, any := fromWildName(x.Name)
-		if any {
+		id := fromWildName(x.Name)
+		info := m.info(id)
+		if info.any {
 			return false
 		}
-		if name == "_" {
+		if info.name == "_" {
 			// values are discarded, matches anything
 			return true
 		}
-		prev, ok := m.values[name]
+		prev, ok := m.values[info.name]
 		if !ok {
 			// first occurrence, record value
-			m.values[name] = node
+			m.values[info.name] = node
 			return true
 		}
 		// multiple uses must match
@@ -383,15 +378,16 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 	for i1 < ns1len || i2 < ns2len {
 		if i1 < ns1len {
 			n1 := ns1.at(i1)
-			name, any := fromWildNode(n1)
-			if any {
+			id := fromWildNode(n1)
+			info := m.info(id)
+			if info.any {
 				// keep track of where this wildcard
-				// started (if name == wildName, we're
-				// trying the same wildcard matching one
-				// more node)
-				if name != wildName {
+				// started (if info.name == wildName,
+				// we're trying the same wildcard
+				// matching one more node)
+				if info.name != wildName {
 					wildStart = i2
-					wildName = name
+					wildName = info.name
 				}
 				// try to match zero or more at i2,
 				// restarting at i2+1 if it fails
@@ -466,30 +462,14 @@ func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
 	return true
 }
 
-// using a prefix is good enough for now
-const (
-	wildPrefix   = "_gogrep_"
-	wildExtraAny = "any_"
-)
-
-func isWildName(name string) bool {
-	return strings.HasPrefix(name, wildPrefix)
-}
-
-func fromWildName(s string) (name string, any bool) {
-	s = strings.TrimPrefix(s, wildPrefix)
-	name = strings.TrimPrefix(s, wildExtraAny)
-	return name, name != s
-}
-
-func fromWildNode(node ast.Node) (name string, any bool) {
+func fromWildNode(node ast.Node) int {
 	switch x := node.(type) {
 	case *ast.Ident:
 		return fromWildName(x.Name)
 	case *ast.ExprStmt:
 		return fromWildNode(x.X)
 	}
-	return "", false
+	return -1
 }
 
 func nodeLists(n ast.Node) []nodeList {

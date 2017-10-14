@@ -285,7 +285,8 @@ func TestMatch(t *testing.T) {
 }
 
 func grepStrs(expr, src string) ([]ast.Node, error) {
-	exprNode, aggressive, _, err := compileExpr(expr)
+	m := matcher{}
+	exprNode, err := m.compileExpr(expr)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +294,7 @@ func grepStrs(expr, src string) ([]ast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return matches(exprNode, srcNode, aggressive), nil
+	return m.matches(exprNode, srcNode), nil
 }
 
 func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
@@ -323,6 +324,7 @@ func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
 		}
 		if len(matches) != 1 {
 			terr("wanted 1 match, got %d", len(matches))
+			return
 		}
 		got := singleLinePrint(matches[0])
 		if got != want {

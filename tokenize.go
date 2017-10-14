@@ -60,7 +60,7 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		case "~":
 			toks = append(toks, fullToken{t.pos, tokAggressive, ""})
 			continue
-		case "switch", "case":
+		case "switch", "select", "case":
 			asCase = t.lit != "case"
 			fallthrough
 		default: // regular Go code

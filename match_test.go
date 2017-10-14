@@ -277,6 +277,10 @@ func TestMatch(t *testing.T) {
 
 		// TODO select statement
 		// TODO communication clause
+		{"select {$*_}", "select {case <-x: a}", 1},
+		{"select {$*_}", "select {}", 1},
+		{"select {$a; $a}", "select {case <-x: a; case <-x: a}", 1},
+		{"select {$a; $a}", "select {case <-x: a; case <-x: b}", 0},
 
 		// aggressive mode
 		{"for range $x {}", "for _ = range a {}", 0},

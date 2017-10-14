@@ -446,17 +446,31 @@ func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
 
 func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 	for _, stmt := range stmts2 {
-		if _, ok := stmt.(*ast.CaseClause); !ok {
+		switch stmt.(type) {
+		case *ast.CaseClause, *ast.CommClause:
+		default:
 			return false
 		}
 	}
 	var left []*ast.Ident
 	for _, stmt := range stmts1 {
-		cc, ok := stmt.(*ast.CaseClause)
-		if !ok || len(cc.List) != 1 || len(cc.Body) != 1 {
+		var expr ast.Expr
+		var bstmt ast.Stmt
+		switch x := stmt.(type) {
+		case *ast.CaseClause:
+			if len(x.List) != 1 || len(x.Body) != 1 {
+				return false
+			}
+			expr, bstmt = x.List[0], x.Body[0]
+		case *ast.CommClause:
+			if x.Comm == nil || len(x.Body) != 1 {
+				return false
+			}
+			expr, bstmt = x.Comm.(*ast.ExprStmt).X, x.Body[0]
+		default:
 			return false
 		}
-		xs, ok := cc.Body[0].(*ast.ExprStmt)
+		xs, ok := bstmt.(*ast.ExprStmt)
 		if !ok {
 			return false
 		}
@@ -464,7 +478,7 @@ func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 		if !ok || bodyIdent.Name != "gogrep_body" {
 			return false
 		}
-		id, ok := cc.List[0].(*ast.Ident)
+		id, ok := expr.(*ast.Ident)
 		if !ok || !isWildName(id.Name) {
 			return false
 		}

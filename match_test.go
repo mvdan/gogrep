@@ -257,6 +257,10 @@ func TestMatch(t *testing.T) {
 		{"switch {$_}", "switch {case 5: x}", 1},
 		{"switch x {$_}", "switch x {case 5: x}", 1},
 		{"switch x {$*_}", "switch x {case 5: x}", 1},
+		{"switch x {$*_}", "switch x {}", 1},
+		{"switch x {$*_}", "switch x {case 1: a; case 2: b}", 1},
+		{"switch {$a; $a}", "switch {case true: a; case true: a}", 1},
+		{"switch {$a; $a}", "switch {case true: a; case true: b}", 0},
 
 		// switch statement
 		{"switch x; y {}", "switch x; y {}", 1},
@@ -284,7 +288,7 @@ func TestMatch(t *testing.T) {
 		{"~ { x; }", "switch { case true: x; }", 1},
 	}
 	for i, tc := range tests {
-		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
 			grepTest(t, tc.expr, tc.src, tc.anyWant)
 		})
 	}

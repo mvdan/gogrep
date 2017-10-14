@@ -134,6 +134,7 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		toks = append(toks, wt)
 		if asCase {
 			toks = append(toks, fullToken{wt.pos, token.COLON, ""})
+			toks = append(toks, fullToken{wt.pos, token.IDENT, "gogrep_body"})
 		}
 	}
 	return toks, err

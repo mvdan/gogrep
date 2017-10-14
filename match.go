@@ -453,7 +453,15 @@ func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 	var left []*ast.Ident
 	for _, stmt := range stmts1 {
 		cc, ok := stmt.(*ast.CaseClause)
-		if !ok || len(cc.List) != 1 || len(cc.Body) != 0 {
+		if !ok || len(cc.List) != 1 || len(cc.Body) != 1 {
+			return false
+		}
+		xs, ok := cc.Body[0].(*ast.ExprStmt)
+		if !ok {
+			return false
+		}
+		bodyIdent, ok := xs.X.(*ast.Ident)
+		if !ok || bodyIdent.Name != "gogrep_body" {
 			return false
 		}
 		id, ok := cc.List[0].(*ast.Ident)

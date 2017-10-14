@@ -97,9 +97,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return true
 
 	case *ast.Ident:
+		y, ok := node.(*ast.Ident)
 		if !isWildName(x.Name) {
 			// not a wildcard
-			y, ok := node.(*ast.Ident)
 			return ok && x.Name == y.Name
 		}
 		if _, ok := node.(ast.Node); !ok {
@@ -109,6 +109,11 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		info := m.info(id)
 		if info.any {
 			return false
+		}
+		if info.nameRx != nil {
+			if !ok || !info.nameRx.MatchString(y.Name) {
+				return false
+			}
 		}
 		if info.name == "_" {
 			// values are discarded, matches anything

@@ -33,3 +33,10 @@ expressions or statements, such as:
 	main.go:47:2: if err != nil { return err; }
 	main.go:60:2: if err != nil { return err; }
 	tokenize.go:42:3: if err != nil { return nil, err; }
+
+You can also restrict the wildcard matches to identifiers (names)
+matching a certain regex. The `.*` pattern can be used to limit the
+matching to all identifiers, but not other types of nodes:
+
+	$ gogrep '$(x /.*/) = fmt.Sprintf($*_)'
+	(will not include 'a.field = ...')

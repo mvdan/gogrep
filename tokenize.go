@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/scanner"
 	"go/token"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -80,7 +81,6 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		id := len(m.vars)
 		wt.lit += strconv.Itoa(id)
 		info.name = t.lit
-		m.vars = append(m.vars, info)
 		if paren {
 			t = next()
 			if t.tok == token.QUO {
@@ -104,7 +104,17 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 					t = next()
 				}
 				t = next() // skip closing /
-				// TODO: pass rxStr on and use it
+				if !strings.HasPrefix(rxStr, "^") {
+					rxStr = "^" + rxStr
+				}
+				if !strings.HasSuffix(rxStr, "$") {
+					rxStr = rxStr + "$"
+				}
+				rx, err := regexp.Compile(rxStr)
+				if err != nil {
+					return nil, fmt.Errorf("%v: %v", wt.pos, err)
+				}
+				info.nameRx = rx
 			}
 			if t.tok != token.RPAREN {
 				err = fmt.Errorf("%v: expected ) to close $(",
@@ -112,6 +122,7 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 				break
 			}
 		}
+		m.vars = append(m.vars, info)
 		toks = append(toks, wt)
 	}
 	return toks, err

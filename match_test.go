@@ -26,6 +26,7 @@ func TestMatch(t *testing.T) {
 		{"\t", "", parseErr("empty source code")},
 		{"$(x", "", tokErr("1:4: expected ) to close $(")},
 		{"$(x /expr", "", tokErr("1:5: expected / to terminate regex")},
+		{"$(x /foo(bar/)", "", tokErr("1:1: error parsing regexp: missing closing ): `^foo(bar$`")},
 
 		// expr parse errors
 		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
@@ -53,11 +54,13 @@ func TestMatch(t *testing.T) {
 		{"go foo()", "a(); go foo(); a()", 1},
 
 		// ident regex matches
-		//{"$(x /foo/)", "bar", 0},
-		//{"$(x /foo/)", "foo", 1},
-		//{"$(x /foo/)", "_foo", 0},
-		//{"$(x /foo/)", "foo_", 0},
-		//{"$(x /.*foo.*/)", "_foo_", 1},
+		{"$(x /foo/)", "bar", 0},
+		{"$(x /foo/)", "foo", 1},
+		{"$(x /foo/)", "_foo", 0},
+		{"$(x /foo/)", "foo_", 0},
+		{"$(x /.*foo.*/)", "_foo_", 1},
+		{"$(x /.*/) = $_", "a = b", 1},
+		{"$(x /.*/) = $_", "a.field = b", 0},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},

@@ -25,6 +25,14 @@ type fullToken struct {
 	lit string
 }
 
+type caseStatus uint
+
+const (
+	caseNone caseStatus = iota
+	caseNeedBlock
+	caseHere
+)
+
 func (m *matcher) tokenize(src string) ([]fullToken, error) {
 	m.vars = m.vars[:0]
 	var s scanner.Scanner
@@ -51,7 +59,7 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		return fullToken{fset.Position(pos), tok, lit}
 	}
 
-	asCase := false
+	caseStat := caseNone
 
 	var toks []fullToken
 	for t := next(); t.tok != token.EOF; t = next() {
@@ -61,9 +69,16 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 			toks = append(toks, fullToken{t.pos, tokAggressive, ""})
 			continue
 		case "switch", "select", "case":
-			asCase = t.lit != "case"
+			if t.lit == "case" {
+				caseStat = caseNone
+			} else {
+				caseStat = caseNeedBlock
+			}
 			fallthrough
 		default: // regular Go code
+			if t.tok == token.LBRACE && caseStat == caseNeedBlock {
+				caseStat = caseHere
+			}
 			toks = append(toks, t)
 			continue
 		}
@@ -128,11 +143,11 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 			}
 		}
 		m.vars = append(m.vars, info)
-		if asCase {
+		if caseStat == caseHere {
 			toks = append(toks, fullToken{wt.pos, token.IDENT, "case"})
 		}
 		toks = append(toks, wt)
-		if asCase {
+		if caseStat == caseHere {
 			toks = append(toks, fullToken{wt.pos, token.COLON, ""})
 			toks = append(toks, fullToken{wt.pos, token.IDENT, "gogrep_body"})
 		}

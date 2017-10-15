@@ -155,6 +155,10 @@ func TestMatch(t *testing.T) {
 		{"foo($x...)", "foo(a)", 0},
 		{"foo($x...)", "foo(a, b)", 0},
 
+		// forcing node to be a statement
+		{"append($*_);", "f(); x = append(x, a)", 0},
+		{"append($*_);", "f(); append(x, a)", 1},
+
 		// many statements
 		{"$x(); $y()", "a(); b()", 1},
 		{"$x(); $y()", "a()", 0},

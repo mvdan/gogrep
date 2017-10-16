@@ -17,30 +17,52 @@ import (
 	"strings"
 )
 
-var recurse = flag.Bool("r", false, "match all dependencies recursively too")
+var usage = func() {
+	fmt.Fprint(os.Stderr, `usage: gogrep commands [packages]
 
-func main() {
-	flag.Usage = func() {
-		fmt.Fprint(os.Stderr, `usage: gogrep pattern [pkg ...]
-
-A pattern is a Go expression or statement which may include wildcards.
+Options:
 
   -r   match all dependencies recursively too
 
-Example: gogrep 'if $x != nil { return $x }'
+A command is of the form "-A pattern", where -A is one of:
+
+  -x   find all nodes matching a pattern
+
+If -A is ommitted for a single command, -x will be assumed.
+
+A pattern is a piece of Go code which may include wildcards. It can be:
+
+       a statement (many if split by semicolonss)
+       an expression (many if split by commas)
+       a type expression
+       a top-level declaration (var, func, const)
+       an entire file
+
+Wildcards consist of '$' and a name. All wildcards with the same name
+within an expression must match the same node, excluding "_". Example:
+
+       $x.$_ = $x // assignment of self to a field in self
+
+If '*' is before the name, it will match any number of nodes. Example:
+
+       fmt.Fprintf(os.Stdout, $*_) // all Fprintfs on stdout
+
+Regexes can also be used to match certain identifier names only. The
+'.*' pattern can be used to match all identifiers. Example:
+
+       fmt.$(_ /Fprint.*/)(os.Stdout, $*_) // all Fprint* on stdout
+
+The nodes resulting from applying the commands will be printed line by
+line to standard output.
 `)
-	}
-	flag.Parse()
-	args := flag.Args()
-	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "need at least one arg")
-		os.Exit(2)
-	}
+}
+
+func main() {
 	m := matcher{
 		out: os.Stdout,
 		ctx: &build.Default,
 	}
-	err := m.fromArgs(args[0], args[1:], *recurse)
+	err := m.fromArgs(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -75,8 +97,50 @@ func (m *matcher) info(id int) varInfo {
 	return m.vars[id]
 }
 
-func (m *matcher) fromArgs(expr string, args []string, recurse bool) error {
-	exprNode, err := m.compileExpr(expr)
+type flagPair struct {
+	name string
+	val  string
+}
+
+type orderedFlag struct {
+	name  string
+	flags *[]flagPair
+}
+
+func (o *orderedFlag) String() string {
+	return ""
+}
+
+func (o *orderedFlag) Set(val string) error {
+	*o.flags = append(*o.flags, flagPair{o.name, val})
+	return nil
+}
+
+func (m *matcher) fromArgs(args []string) error {
+	flagSet := flag.NewFlagSet("gogrep", flag.ExitOnError)
+	flagSet.Usage = usage
+	recurse := flagSet.Bool("r", false, "match all dependencies recursively too")
+
+	var flags []flagPair
+	flagSet.Var(&orderedFlag{
+		name:  "x",
+		flags: &flags,
+	}, "x", "range over the matches")
+	flagSet.Parse(args)
+	paths := flagSet.Args()
+
+	if len(flags) == 0 && len(paths) > 0 {
+		flags = append(flags, flagPair{"x", paths[0]})
+		paths = paths[1:]
+	}
+	if len(flags) < 1 {
+		return fmt.Errorf("need at least one command")
+	}
+	if len(flags) > 1 {
+		return fmt.Errorf("TODO: command composability")
+	}
+
+	exprNode, err := m.compileExpr(flags[0].val)
 	if err != nil {
 		return err
 	}
@@ -88,7 +152,7 @@ func (m *matcher) fromArgs(expr string, args []string, recurse bool) error {
 	var all []ast.Node
 	loader := nodeLoader{wd, m.ctx, fset}
 	if !m.typed {
-		nodes, err := loader.untyped(args, recurse)
+		nodes, err := loader.untyped(paths, *recurse)
 		if err != nil {
 			return err
 		}
@@ -96,7 +160,7 @@ func (m *matcher) fromArgs(expr string, args []string, recurse bool) error {
 			all = append(all, m.matches(exprNode, node)...)
 		}
 	} else {
-		prog, err := loader.typed(args, recurse)
+		prog, err := loader.typed(paths, *recurse)
 		if err != nil {
 			return err
 		}

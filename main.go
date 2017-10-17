@@ -160,6 +160,14 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		name: "x",
 		cmds: &cmds,
 	}, "x", "range over the matches")
+	flagSet.Var(&orderedFlag{
+		name: "g",
+		cmds: &cmds,
+	}, "g", "discard if there are no matches")
+	flagSet.Var(&orderedFlag{
+		name: "v",
+		cmds: &cmds,
+	}, "v", "discard if there are any matches")
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 

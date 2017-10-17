@@ -303,12 +303,22 @@ func TestMatch(t *testing.T) {
 		// many cmds
 		{
 			[]string{"-x", "break"},
-			"switch { case x: break; }; for { y(); break; break }",
+			"switch { case x: break }; for { y(); break; break }",
 			3,
 		},
 		{
 			[]string{"-x", "for { $*_ }", "-x", "break"},
-			"switch { case x: break; }; for { y(); break; break }",
+			"switch { case x: break }; for { y(); break; break }",
+			2,
+		},
+		{
+			[]string{"-x", "for { $*_ }", "-g", "break"},
+			"break; for {}; for { if x { break } else { break } }",
+			1,
+		},
+		{
+			[]string{"-x", "for { $*_ }", "-v", "break"},
+			"break; for {}; for { x() }; for { break }",
 			2,
 		},
 	}

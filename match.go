@@ -18,6 +18,10 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 	switch cmd.name {
 	case "x":
 		fn = m.cmdRange
+	case "g":
+		fn = m.cmdFilter(true)
+	case "v":
+		fn = m.cmdFilter(false)
 	}
 	return m.matches(cmds[1:], fn(cmd, nodes))
 }
@@ -51,6 +55,38 @@ func (m *matcher) cmdRange(cmd exprCmd, nodes []ast.Node) []ast.Node {
 		walkWithLists(cmd.node, node, match)
 	}
 	return matches
+}
+
+func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []ast.Node) []ast.Node {
+	return func(cmd exprCmd, nodes []ast.Node) []ast.Node {
+		var matches []ast.Node
+		any := false
+		match := func(exprNode, node ast.Node) {
+			if node == nil {
+				return
+			}
+			m.values = map[string]ast.Node{}
+			var found ast.Node
+			sts1, ok1 := exprNode.(stmtList)
+			sts2, ok2 := node.(stmtList)
+			if ok1 && ok2 {
+				found = m.nodes(sts1, sts2, true)
+			} else if m.node(exprNode, node) {
+				found = node
+			}
+			if found != nil {
+				any = true
+			}
+		}
+		for _, node := range nodes {
+			any = false
+			walkWithLists(cmd.node, node, match)
+			if any == wantAny {
+				matches = append(matches, node)
+			}
+		}
+		return matches
+	}
 }
 
 func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {

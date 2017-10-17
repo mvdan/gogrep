@@ -14,7 +14,15 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 		return nodes
 	}
 	cmd := cmds[0]
-	cmds = cmds[1:]
+	var fn func(exprCmd, []ast.Node) []ast.Node
+	switch cmd.name {
+	case "x":
+		fn = m.cmdRange
+	}
+	return m.matches(cmds[1:], fn(cmd, nodes))
+}
+
+func (m *matcher) cmdRange(cmd exprCmd, nodes []ast.Node) []ast.Node {
 	var matches []ast.Node
 	seen := map[[2]token.Pos]bool{}
 	match := func(exprNode, node ast.Node) {
@@ -39,32 +47,36 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 			seen[posRange] = true
 		}
 	}
+	for _, node := range nodes {
+		walkWithLists(cmd.node, node, match)
+	}
+	return matches
+}
+
+func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 	visit := func(node ast.Node) bool {
-		match(cmd.node, node)
+		fn(exprNode, node)
 		for _, list := range nodeLists(node) {
-			match(cmd.node, list)
+			fn(exprNode, list)
 		}
 		return true
 	}
-	for _, node := range nodes {
-		// ast.Walk barfs on ast.Node types it doesn't know, so
-		// do the first level manually here
-		if list, ok := node.(nodeList); ok {
-			if e, ok := cmd.node.(ast.Expr); ok {
-				// so that "$*a" will match "a, b"
-				match(exprList([]ast.Expr{e}), list)
-				// so that "$*a" will match "a; b"
-				match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
-			}
-			match(cmd.node, list)
-			for i := 0; i < list.len(); i++ {
-				ast.Inspect(list.at(i), visit)
-			}
-		} else {
-			ast.Inspect(node, visit)
+	// ast.Walk barfs on ast.Node types it doesn't know, so
+	// do the first level manually here
+	if list, ok := node.(nodeList); ok {
+		if e, ok := exprNode.(ast.Expr); ok {
+			// so that "$*a" will match "a, b"
+			fn(exprList([]ast.Expr{e}), list)
+			// so that "$*a" will match "a; b"
+			fn(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
 		}
+		fn(exprNode, list)
+		for i := 0; i < list.len(); i++ {
+			ast.Inspect(list.at(i), visit)
+		}
+	} else {
+		ast.Inspect(node, visit)
 	}
-	return m.matches(cmds, matches)
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {

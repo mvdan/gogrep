@@ -84,12 +84,22 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
 	return nodes, nil
 }
 
-func (l nodeLoader) typed(args []string, recurse bool) (*loader.Program, error) {
+func (l nodeLoader) typed(args []string, recurse bool) ([]ast.Node, error) {
 	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
 	conf := loader.Config{Fset: l.fset, Cwd: l.wd, Build: l.ctx}
 	if _, err := conf.FromArgs(paths, true); err != nil {
 		return nil, err
 	}
-	return conf.Load()
+	prog, err := conf.Load()
+	if err != nil {
+		return nil, err
+	}
+	var nodes []ast.Node
+	for _, pkg := range prog.InitialPackages() {
+		for _, file := range pkg.Files {
+			nodes = append(nodes, file)
+		}
+	}
+	return nodes, nil
 }

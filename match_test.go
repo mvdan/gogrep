@@ -16,8 +16,9 @@ func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) 
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
-		expr, src string
-		anyWant   interface{}
+		exprs   interface{}
+		src     string
+		anyWant interface{}
 	}{
 		// expr tokenize errors
 		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
@@ -301,29 +302,35 @@ func TestMatch(t *testing.T) {
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
-			grepTest(t, tc.expr, tc.src, tc.anyWant)
+			grepTest(t, tc.exprs, tc.src, tc.anyWant)
 		})
 	}
 }
 
-func grepStrs(expr, src string) ([]ast.Node, error) {
+func grepStrs(cmds []exprCmd, src string) ([]ast.Node, error) {
 	m := matcher{}
-	exprNode, err := m.compileExpr(expr)
-	if err != nil {
+	if err := m.compileCmds(cmds); err != nil {
 		return nil, err
 	}
 	srcNode, err := parse(src)
 	if err != nil {
 		return nil, err
 	}
-	return m.matches(exprNode, srcNode), nil
+	return m.matches(cmds, []ast.Node{srcNode}), nil
 }
 
-func grepTest(t *testing.T, expr, src string, anyWant interface{}) {
-	terr := func(format string, a ...interface{}) {
-		t.Errorf("%s | %s: %s", expr, src, fmt.Sprintf(format, a...))
+func grepTest(t *testing.T, exprs interface{}, src string, anyWant interface{}) {
+	var cmds []exprCmd
+	switch x := exprs.(type) {
+	case string:
+		cmds = []exprCmd{{name: "x", src: x}}
+	default:
+		t.Fatalf("unexpected type: %T\n", x)
 	}
-	matches, err := grepStrs(expr, src)
+	terr := func(format string, a ...interface{}) {
+		t.Errorf("%v | %s: %s", cmds, src, fmt.Sprintf(format, a...))
+	}
+	matches, err := grepStrs(cmds, src)
 	switch want := anyWant.(type) {
 	case wantErr:
 		if err == nil {

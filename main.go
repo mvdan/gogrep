@@ -97,22 +97,20 @@ func (m *matcher) info(id int) varInfo {
 	return m.vars[id]
 }
 
-type flagPair struct {
+type exprCmd struct {
 	name string
-	val  string
+	src  string
+	node ast.Node
 }
 
 type orderedFlag struct {
-	name  string
-	flags *[]flagPair
+	name string
+	cmds *[]exprCmd
 }
 
-func (o *orderedFlag) String() string {
-	return ""
-}
-
+func (o *orderedFlag) String() string { return "" }
 func (o *orderedFlag) Set(val string) error {
-	*o.flags = append(*o.flags, flagPair{o.name, val})
+	*o.cmds = append(*o.cmds, exprCmd{name: o.name, src: val})
 	return nil
 }
 
@@ -121,27 +119,26 @@ func (m *matcher) fromArgs(args []string) error {
 	flagSet.Usage = usage
 	recurse := flagSet.Bool("r", false, "match all dependencies recursively too")
 
-	var flags []flagPair
+	var cmds []exprCmd
 	flagSet.Var(&orderedFlag{
-		name:  "x",
-		flags: &flags,
+		name: "x",
+		cmds: &cmds,
 	}, "x", "range over the matches")
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 
-	if len(flags) == 0 && len(paths) > 0 {
-		flags = append(flags, flagPair{"x", paths[0]})
+	if len(cmds) == 0 && len(paths) > 0 {
+		cmds = append(cmds, exprCmd{name: "x", src: paths[0]})
 		paths = paths[1:]
 	}
-	if len(flags) < 1 {
+	if len(cmds) < 1 {
 		return fmt.Errorf("need at least one command")
 	}
-	if len(flags) > 1 {
+	if len(cmds) > 1 {
 		return fmt.Errorf("TODO: command composability")
 	}
 
-	exprNode, err := m.compileExpr(flags[0].val)
-	if err != nil {
+	if err := m.compileCmds(cmds); err != nil {
 		return err
 	}
 	fset := token.NewFileSet()
@@ -156,20 +153,13 @@ func (m *matcher) fromArgs(args []string) error {
 		if err != nil {
 			return err
 		}
-		for _, node := range nodes {
-			all = append(all, m.matches(exprNode, node)...)
-		}
+		all = append(all, m.matches(cmds, nodes)...)
 	} else {
-		prog, err := loader.typed(paths, *recurse)
+		nodes, err := loader.typed(paths, *recurse)
 		if err != nil {
 			return err
 		}
-		// TODO: recursive mode
-		for _, pkg := range prog.InitialPackages() {
-			for _, file := range pkg.Files {
-				all = append(all, m.matches(exprNode, file)...)
-			}
-		}
+		all = append(all, m.matches(cmds, nodes)...)
 	}
 	for _, n := range all {
 		fpos := loader.fset.Position(n.Pos())
@@ -253,6 +243,17 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 		l.offs++
 	}
 	return l.Buffer.WriteString(s)
+}
+
+func (m *matcher) compileCmds(cmds []exprCmd) error {
+	for i, cmd := range cmds {
+		node, err := m.compileExpr(cmd.src)
+		if err != nil {
+			return err
+		}
+		cmds[i].node = node
+	}
+	return nil
 }
 
 func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {

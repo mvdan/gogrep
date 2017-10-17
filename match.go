@@ -9,7 +9,12 @@ import (
 	"go/token"
 )
 
-func (m *matcher) matches(exprNode, node ast.Node) []ast.Node {
+func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
+	if len(cmds) == 0 {
+		return nodes
+	}
+	cmd := cmds[0]
+	cmds = cmds[1:]
 	var matches []ast.Node
 	seen := map[[2]token.Pos]bool{}
 	match := func(exprNode, node ast.Node) {
@@ -35,27 +40,29 @@ func (m *matcher) matches(exprNode, node ast.Node) []ast.Node {
 		}
 	}
 	visit := func(node ast.Node) bool {
-		match(exprNode, node)
+		match(cmd.node, node)
 		for _, list := range nodeLists(node) {
-			match(exprNode, list)
+			match(cmd.node, list)
 		}
 		return true
 	}
-	// ast.Walk barfs on ast.Node types it doesn't know, so
-	// do the first level manually here
-	if list, ok := node.(nodeList); ok {
-		if e, ok := exprNode.(ast.Expr); ok {
-			// so that "$*a" will match "a, b"
-			match(exprList([]ast.Expr{e}), list)
-			// so that "$*a" will match "a; b"
-			match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
+	for _, node := range nodes {
+		// ast.Walk barfs on ast.Node types it doesn't know, so
+		// do the first level manually here
+		if list, ok := node.(nodeList); ok {
+			if e, ok := cmd.node.(ast.Expr); ok {
+				// so that "$*a" will match "a, b"
+				match(exprList([]ast.Expr{e}), list)
+				// so that "$*a" will match "a; b"
+				match(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
+			}
+			match(cmd.node, list)
+			for i := 0; i < list.len(); i++ {
+				ast.Inspect(list.at(i), visit)
+			}
+		} else {
+			ast.Inspect(node, visit)
 		}
-		match(exprNode, list)
-		for i := 0; i < list.len(); i++ {
-			ast.Inspect(list.at(i), visit)
-		}
-	} else {
-		ast.Inspect(node, visit)
 	}
 	return matches
 }

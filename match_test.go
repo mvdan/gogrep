@@ -16,26 +16,26 @@ func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) 
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
-		exprs   interface{}
+		args    interface{}
 		src     string
 		anyWant interface{}
 	}{
 		// expr tokenize errors
-		{"$", "", tokErr("1:2: $ must be followed by ident, got EOF")},
-		{`"`, "", tokErr("1:1: string literal not terminated")},
-		{"", "", parseErr("empty source code")},
-		{"\t", "", parseErr("empty source code")},
-		{"$(x", "", tokErr("1:4: expected ) to close $(")},
-		{"$(x /expr", "", tokErr("1:5: expected / to terminate regex")},
-		{"$(x /foo(bar/)", "", tokErr("1:1: error parsing regexp: missing closing ): `^foo(bar$`")},
+		{"$", "a", tokErr("1:2: $ must be followed by ident, got EOF")},
+		{`"`, "a", tokErr("1:1: string literal not terminated")},
+		{"", "a", parseErr("empty source code")},
+		{"\t", "a", parseErr("empty source code")},
+		{"$(x", "a", tokErr("1:4: expected ) to close $(")},
+		{"$(x /expr", "a", tokErr("1:5: expected / to terminate regex")},
+		{"$(x /foo(bar/)", "a", tokErr("1:1: error parsing regexp: missing closing ): `^foo(bar$`")},
 
 		// expr parse errors
-		{"foo)", "", parseErr("1:4: expected statement, found ')'")},
-		{"{", "", parseErr("1:4: expected '}', found 'EOF'")},
-		{"$x)", "", parseErr("1:3: expected statement, found ')'")},
-		{"$x(", "", parseErr("1:5: expected operand, found '}'")},
-		{"$*x)", "", parseErr("1:4: expected statement, found ')'")},
-		{"a\n$x)", "", parseErr("2:3: expected statement, found ')'")},
+		{"foo)", "a", parseErr("1:4: expected statement, found ')'")},
+		{"{", "a", parseErr("1:4: expected '}', found 'EOF'")},
+		{"$x)", "a", parseErr("1:3: expected statement, found ')'")},
+		{"$x(", "a", parseErr("1:5: expected operand, found '}'")},
+		{"$*x)", "a", parseErr("1:4: expected statement, found ')'")},
+		{"a\n$x)", "a", parseErr("2:3: expected statement, found ')'")},
 
 		// basic lits
 		{"123", "123", 1},
@@ -119,7 +119,7 @@ func TestMatch(t *testing.T) {
 		{"($x)", "a + b", 0},
 
 		// unary ops
-		{"-someConst", "- someConst", 1},
+		{[]string{"--", "-someConst"}, "- someConst", 1},
 		{"*someVar", "* someVar", 1},
 
 		// binary ops
@@ -302,35 +302,34 @@ func TestMatch(t *testing.T) {
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
-			grepTest(t, tc.exprs, tc.src, tc.anyWant)
+			grepTest(t, tc.args, tc.src, tc.anyWant)
 		})
 	}
 }
 
-func grepStrs(cmds []exprCmd, src string) ([]ast.Node, error) {
-	m := matcher{}
-	if err := m.compileCmds(cmds); err != nil {
-		return nil, err
-	}
-	srcNode, err := parse(src)
-	if err != nil {
-		return nil, err
-	}
-	return m.matches(cmds, []ast.Node{srcNode}), nil
-}
-
-func grepTest(t *testing.T, exprs interface{}, src string, anyWant interface{}) {
-	var cmds []exprCmd
-	switch x := exprs.(type) {
+func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
+	var strs []string
+	switch x := args.(type) {
 	case string:
-		cmds = []exprCmd{{name: "x", src: x}}
+		strs = append(strs, x)
+	case []string:
+		strs = x
 	default:
 		t.Fatalf("unexpected type: %T\n", x)
 	}
 	terr := func(format string, a ...interface{}) {
-		t.Errorf("%v | %s: %s", cmds, src, fmt.Sprintf(format, a...))
+		t.Errorf("%v | %s: %s", args, src, fmt.Sprintf(format, a...))
 	}
-	matches, err := grepStrs(cmds, src)
+	m := matcher{}
+	cmds, paths, err := m.parseCmds(strs)
+	if len(paths) > 0 {
+		t.Fatalf("non-zero paths: %v", paths)
+	}
+	srcNode, srcErr := parse(src)
+	if srcErr != nil {
+		t.Fatal(srcErr)
+	}
+	matches := m.matches(cmds, []ast.Node{srcNode})
 	switch want := anyWant.(type) {
 	case wantErr:
 		if err == nil {

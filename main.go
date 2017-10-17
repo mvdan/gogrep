@@ -73,6 +73,7 @@ type matcher struct {
 	out io.Writer
 	ctx *build.Context
 
+	recursive         bool
 	typed, aggressive bool
 
 	// information about variables (wildcards), by id (which is an
@@ -115,9 +116,44 @@ func (o *orderedFlag) Set(val string) error {
 }
 
 func (m *matcher) fromArgs(args []string) error {
+	cmds, paths, err := m.parseCmds(args)
+	if err != nil {
+		return err
+	}
+	fset := token.NewFileSet()
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	var all []ast.Node
+	loader := nodeLoader{wd, m.ctx, fset}
+	if !m.typed {
+		nodes, err := loader.untyped(paths, m.recursive)
+		if err != nil {
+			return err
+		}
+		all = append(all, m.matches(cmds, nodes)...)
+	} else {
+		nodes, err := loader.typed(paths, m.recursive)
+		if err != nil {
+			return err
+		}
+		all = append(all, m.matches(cmds, nodes)...)
+	}
+	for _, n := range all {
+		fpos := loader.fset.Position(n.Pos())
+		if strings.HasPrefix(fpos.Filename, wd) {
+			fpos.Filename = fpos.Filename[len(wd)+1:]
+		}
+		fmt.Fprintf(m.out, "%v: %s\n", fpos, singleLinePrint(n))
+	}
+	return nil
+}
+
+func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	flagSet := flag.NewFlagSet("gogrep", flag.ExitOnError)
 	flagSet.Usage = usage
-	recurse := flagSet.Bool("r", false, "match all dependencies recursively too")
+	flagSet.BoolVar(&m.recursive, "r", false, "match all dependencies recursively too")
 
 	var cmds []exprCmd
 	flagSet.Var(&orderedFlag{
@@ -132,43 +168,19 @@ func (m *matcher) fromArgs(args []string) error {
 		paths = paths[1:]
 	}
 	if len(cmds) < 1 {
-		return fmt.Errorf("need at least one command")
+		return nil, nil, fmt.Errorf("need at least one command")
 	}
 	if len(cmds) > 1 {
-		return fmt.Errorf("TODO: command composability")
+		return nil, nil, fmt.Errorf("TODO: command composability")
 	}
-
-	if err := m.compileCmds(cmds); err != nil {
-		return err
-	}
-	fset := token.NewFileSet()
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	var all []ast.Node
-	loader := nodeLoader{wd, m.ctx, fset}
-	if !m.typed {
-		nodes, err := loader.untyped(paths, *recurse)
+	for i, cmd := range cmds {
+		node, err := m.compileExpr(cmd.src)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		all = append(all, m.matches(cmds, nodes)...)
-	} else {
-		nodes, err := loader.typed(paths, *recurse)
-		if err != nil {
-			return err
-		}
-		all = append(all, m.matches(cmds, nodes)...)
+		cmds[i].node = node
 	}
-	for _, n := range all {
-		fpos := loader.fset.Position(n.Pos())
-		if strings.HasPrefix(fpos.Filename, wd) {
-			fpos.Filename = fpos.Filename[len(wd)+1:]
-		}
-		fmt.Fprintf(m.out, "%v: %s\n", fpos, singleLinePrint(n))
-	}
-	return nil
+	return cmds, paths, nil
 }
 
 type bufferJoinLines struct {
@@ -246,13 +258,6 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 }
 
 func (m *matcher) compileCmds(cmds []exprCmd) error {
-	for i, cmd := range cmds {
-		node, err := m.compileExpr(cmd.src)
-		if err != nil {
-			return err
-		}
-		cmds[i].node = node
-	}
 	return nil
 }
 

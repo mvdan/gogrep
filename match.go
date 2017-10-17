@@ -34,14 +34,7 @@ func (m *matcher) cmdRange(cmd exprCmd, nodes []ast.Node) []ast.Node {
 			return
 		}
 		m.values = map[string]ast.Node{}
-		var found ast.Node
-		sts1, ok1 := exprNode.(stmtList)
-		sts2, ok2 := node.(stmtList)
-		if ok1 && ok2 {
-			found = m.nodes(sts1, sts2, true)
-		} else if m.node(exprNode, node) {
-			found = node
-		}
+		found := m.topNode(exprNode, node)
 		if found == nil {
 			return
 		}
@@ -66,14 +59,7 @@ func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []ast.Node) []ast.Node {
 				return
 			}
 			m.values = map[string]ast.Node{}
-			var found ast.Node
-			sts1, ok1 := exprNode.(stmtList)
-			sts2, ok2 := node.(stmtList)
-			if ok1 && ok2 {
-				found = m.nodes(sts1, sts2, true)
-			} else if m.node(exprNode, node) {
-				found = node
-			}
+			found := m.topNode(exprNode, node)
 			if found != nil {
 				any = true
 			}
@@ -113,6 +99,18 @@ func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 	} else {
 		ast.Inspect(node, visit)
 	}
+}
+
+func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
+	sts1, ok1 := exprNode.(stmtList)
+	sts2, ok2 := node.(stmtList)
+	if ok1 && ok2 {
+		return m.nodes(sts1, sts2, true)
+	}
+	if m.node(exprNode, node) {
+		return node
+	}
+	return nil
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {

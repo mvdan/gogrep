@@ -170,9 +170,6 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	if len(cmds) < 1 {
 		return nil, nil, fmt.Errorf("need at least one command")
 	}
-	if len(cmds) > 1 {
-		return nil, nil, fmt.Errorf("TODO: command composability")
-	}
 	for i, cmd := range cmds {
 		node, err := m.compileExpr(cmd.src)
 		if err != nil {

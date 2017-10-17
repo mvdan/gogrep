@@ -299,6 +299,18 @@ func TestMatch(t *testing.T) {
 		{"~ var a int", "var (a, b int; c bool)", 1},
 		{"{ x; }", "switch { case true: x; }", 0},
 		{"~ { x; }", "switch { case true: x; }", 1},
+
+		// many cmds
+		{
+			[]string{"-x", "break"},
+			"switch { case x: break; }; for { y(); break; break }",
+			3,
+		},
+		{
+			[]string{"-x", "for { $*_ }", "-x", "break"},
+			"switch { case x: break; }; for { y(); break; break }",
+			2,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

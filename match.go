@@ -64,7 +64,7 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 			ast.Inspect(node, visit)
 		}
 	}
-	return matches
+	return m.matches(cmds, matches)
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {

@@ -33,7 +33,7 @@ const (
 	caseHere
 )
 
-func (m *matcher) tokenize(src string) ([]fullToken, error) {
+func (m *matcher) tokenize(src []byte) ([]fullToken, error) {
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))
@@ -50,8 +50,7 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 
 	// we will modify the input source under the scanner's nose to
 	// enable some features such as regexes.
-	scanSrc := []byte(src)
-	s.Init(file, scanSrc, onError, scanner.ScanComments)
+	s.Init(file, src, onError, scanner.ScanComments)
 
 	next := func() fullToken {
 		pos, tok, lit := s.Scan()
@@ -81,67 +80,10 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 			toks = append(toks, t)
 			continue
 		}
-		wt := fullToken{t.pos, t.tok, wildPrefix}
-		t = next()
-		paren := false
-		if paren = t.tok == token.LPAREN; paren {
-			t = next()
+		wt, err := m.wildcard(t.pos, next, src)
+		if err != nil {
+			return nil, err
 		}
-		var info varInfo
-		if t.tok == token.MUL {
-			t = next()
-			info.any = true
-		}
-		if t.tok != token.IDENT {
-			err = fmt.Errorf("%v: $ must be followed by ident, got %v",
-				t.pos, t.tok)
-			break
-		}
-		id := len(m.vars)
-		wt.lit += strconv.Itoa(id)
-		info.name = t.lit
-		if paren {
-			t = next()
-			if t.tok == token.QUO {
-				start := t.pos.Offset + 1
-				rxStr := string(src[start:])
-				end := strings.Index(rxStr, "/")
-				if end < 0 {
-					err = fmt.Errorf("%v: expected / to terminate regex",
-						t.pos)
-					break
-				}
-				rxStr = rxStr[:end]
-				for i := start; i < start+end; i++ {
-					scanSrc[i] = ' '
-				}
-				t = next() // skip opening /
-				if t.tok != token.QUO {
-					// skip any following token, as
-					// go/scanner retains one char
-					// for its next token.
-					t = next()
-				}
-				t = next() // skip closing /
-				if !strings.HasPrefix(rxStr, "^") {
-					rxStr = "^" + rxStr
-				}
-				if !strings.HasSuffix(rxStr, "$") {
-					rxStr = rxStr + "$"
-				}
-				rx, err := regexp.Compile(rxStr)
-				if err != nil {
-					return nil, fmt.Errorf("%v: %v", wt.pos, err)
-				}
-				info.nameRx = rx
-			}
-			if t.tok != token.RPAREN {
-				err = fmt.Errorf("%v: expected ) to close $(",
-					t.pos)
-				break
-			}
-		}
-		m.vars = append(m.vars, info)
 		if caseStat == caseHere {
 			toks = append(toks, fullToken{wt.pos, token.IDENT, "case"})
 		}
@@ -152,6 +94,70 @@ func (m *matcher) tokenize(src string) ([]fullToken, error) {
 		}
 	}
 	return toks, err
+}
+
+func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte) (fullToken, error) {
+	wt := fullToken{pos, token.IDENT, wildPrefix}
+	t := next()
+	paren := false
+	if paren = t.tok == token.LPAREN; paren {
+		t = next()
+	}
+	var info varInfo
+	if t.tok == token.MUL {
+		t = next()
+		info.any = true
+	}
+	if t.tok != token.IDENT {
+		return wt, fmt.Errorf("%v: $ must be followed by ident, got %v",
+			t.pos, t.tok)
+	}
+	id := len(m.vars)
+	wt.lit += strconv.Itoa(id)
+	info.name = t.lit
+	if !paren {
+		m.vars = append(m.vars, info)
+		return wt, nil
+	}
+	t = next()
+	if t.tok == token.QUO {
+		start := t.pos.Offset + 1
+		rxStr := string(src[start:])
+		end := strings.Index(rxStr, "/")
+		if end < 0 {
+			return wt, fmt.Errorf("%v: expected / to terminate regex",
+				t.pos)
+		}
+		rxStr = rxStr[:end]
+		for i := start; i < start+end; i++ {
+			src[i] = ' '
+		}
+		t = next() // skip opening /
+		if t.tok != token.QUO {
+			// skip any following token, as
+			// go/scanner retains one char
+			// for its next token.
+			t = next()
+		}
+		t = next() // skip closing /
+		if !strings.HasPrefix(rxStr, "^") {
+			rxStr = "^" + rxStr
+		}
+		if !strings.HasSuffix(rxStr, "$") {
+			rxStr = rxStr + "$"
+		}
+		rx, err := regexp.Compile(rxStr)
+		if err != nil {
+			return wt, fmt.Errorf("%v: %v", wt.pos, err)
+		}
+		info.nameRx = rx
+	}
+	if t.tok != token.RPAREN {
+		return wt, fmt.Errorf("%v: expected ) to close $(",
+			t.pos)
+	}
+	m.vars = append(m.vars, info)
+	return wt, nil
 }
 
 // using a prefix is good enough for now

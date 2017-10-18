@@ -267,7 +267,7 @@ func (m *matcher) compileCmds(cmds []exprCmd) error {
 }
 
 func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
-	toks, err := m.tokenize(expr)
+	toks, err := m.tokenize([]byte(expr))
 	if err != nil {
 		return nil, fmt.Errorf("cannot tokenize expr: %v", err)
 	}

@@ -120,37 +120,43 @@ func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte
 		return wt, nil
 	}
 	t = next()
-	if t.tok == token.QUO {
-		start := t.pos.Offset + 1
-		rxStr := string(src[start:])
-		end := strings.Index(rxStr, "/")
-		if end < 0 {
-			return wt, fmt.Errorf("%v: expected / to terminate regex",
-				t.pos)
+ops:
+	for {
+		switch t.tok {
+		case token.QUO:
+			start := t.pos.Offset + 1
+			rxStr := string(src[start:])
+			end := strings.Index(rxStr, "/")
+			if end < 0 {
+				return wt, fmt.Errorf("%v: expected / to terminate regex",
+					t.pos)
+			}
+			rxStr = rxStr[:end]
+			for i := start; i < start+end; i++ {
+				src[i] = ' '
+			}
+			t = next() // skip opening /
+			if t.tok != token.QUO {
+				// skip any following token, as
+				// go/scanner retains one char
+				// for its next token.
+				t = next()
+			}
+			t = next() // skip closing /
+			if !strings.HasPrefix(rxStr, "^") {
+				rxStr = "^" + rxStr
+			}
+			if !strings.HasSuffix(rxStr, "$") {
+				rxStr = rxStr + "$"
+			}
+			rx, err := regexp.Compile(rxStr)
+			if err != nil {
+				return wt, fmt.Errorf("%v: %v", wt.pos, err)
+			}
+			info.nameRxs = append(info.nameRxs, rx)
+		default:
+			break ops
 		}
-		rxStr = rxStr[:end]
-		for i := start; i < start+end; i++ {
-			src[i] = ' '
-		}
-		t = next() // skip opening /
-		if t.tok != token.QUO {
-			// skip any following token, as
-			// go/scanner retains one char
-			// for its next token.
-			t = next()
-		}
-		t = next() // skip closing /
-		if !strings.HasPrefix(rxStr, "^") {
-			rxStr = "^" + rxStr
-		}
-		if !strings.HasSuffix(rxStr, "$") {
-			rxStr = rxStr + "$"
-		}
-		rx, err := regexp.Compile(rxStr)
-		if err != nil {
-			return wt, fmt.Errorf("%v: %v", wt.pos, err)
-		}
-		info.nameRx = rx
 	}
 	if t.tok != token.RPAREN {
 		return wt, fmt.Errorf("%v: expected ) to close $(",

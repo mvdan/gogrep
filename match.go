@@ -163,8 +163,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if info.any {
 			return false
 		}
-		if info.nameRx != nil {
-			if !ok || !info.nameRx.MatchString(y.Name) {
+		for _, rx := range info.nameRxs {
+			if !ok || !rx.MatchString(y.Name) {
 				return false
 			}
 		}

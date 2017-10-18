@@ -62,6 +62,7 @@ func TestMatch(t *testing.T) {
 		{"$(x /.*foo.*/)", "_foo_", 1},
 		{"$(x /.*/) = $_", "a = b", 1},
 		{"$(x /.*/) = $_", "a.field = b", 0},
+		{"$(x /.*foo.*/ /.*bar.*/)", "foobar; barfoo; foo; barbar", 2},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},

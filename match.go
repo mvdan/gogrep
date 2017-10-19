@@ -340,14 +340,42 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && (m.cases(x.List, y.List) || m.stmts(x.List, y.List))
 	case *ast.IfStmt:
 		y, ok := node.(*ast.IfStmt)
-		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+		if !ok {
+			return false
+		}
+		ident, ok := x.Cond.(*ast.Ident)
+		switch {
+		case x.Init != nil:
+		case !ok, !isWildName(ident.Name):
+		case !m.info(fromWildName(ident.Name)).any:
+		default:
+			// for $*x { ... } on the left
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+			return m.node(left, initExprList(y.Init, y.Cond, nil)) &&
+				m.node(x.Body, y.Body)
+		}
+		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
 			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 	case *ast.CaseClause:
 		y, ok := node.(*ast.CaseClause)
 		return ok && m.exprs(x.List, y.List) && m.stmts(x.Body, y.Body)
 	case *ast.SwitchStmt:
 		y, ok := node.(*ast.SwitchStmt)
-		return ok && m.node(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
+		if !ok {
+			return false
+		}
+		ident, ok := x.Tag.(*ast.Ident)
+		switch {
+		case x.Init != nil:
+		case !ok, !isWildName(ident.Name):
+		case !m.info(fromWildName(ident.Name)).any:
+		default:
+			// for $*x { ... } on the left
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+			return m.node(left, initExprList(y.Init, y.Tag, nil)) &&
+				m.node(x.Body, y.Body)
+		}
+		return m.node(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
 	case *ast.TypeSwitchStmt:
 		y, ok := node.(*ast.TypeSwitchStmt)
 		return ok && m.node(x.Init, y.Init) && m.node(x.Assign, y.Assign) && m.node(x.Body, y.Body)

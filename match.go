@@ -359,7 +359,21 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && m.node(x.Body, y.Body)
 	case *ast.ForStmt:
 		y, ok := node.(*ast.ForStmt)
-		return ok && m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+		if !ok {
+			return false
+		}
+		ident, ok := x.Cond.(*ast.Ident)
+		switch {
+		case x.Init != nil, x.Post != nil:
+		case !ok, !isWildName(ident.Name):
+		case !m.info(fromWildName(ident.Name)).any:
+		default:
+			// for $*x { ... } on the left
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+			return m.node(left, initExprList(y.Init, y.Cond, y.Post)) &&
+				m.node(x.Body, y.Body)
+		}
+		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
 			m.node(x.Post, y.Post) && m.node(x.Body, y.Body)
 	case *ast.RangeStmt:
 		y, ok := node.(*ast.RangeStmt)
@@ -495,6 +509,20 @@ func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
 	return m.nodes(identList(ids1), identList(ids2), false) != nil
+}
+
+func initExprList(init ast.Stmt, expr ast.Expr, post ast.Stmt) stmtList {
+	var stmts []ast.Stmt
+	if init != nil {
+		stmts = append(stmts, init)
+	}
+	if expr != nil {
+		stmts = append(stmts, &ast.ExprStmt{X: expr})
+	}
+	if post != nil {
+		stmts = append(stmts, post)
+	}
+	return stmtList(stmts)
 }
 
 func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {

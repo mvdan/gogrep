@@ -219,6 +219,13 @@ func TestMatch(t *testing.T) {
 		{"for $x := range $y { $z }", "for i := range l { c() }", 1},
 		{"for range $y { $z }", "for _, e := range l { e() }", 0},
 
+		// $*_ matching stmt+expr combos
+		{"for $*x {}", "for {}", 1},
+		{"for $*x {}", "for a {}", 1},
+		{"for $*x {}", "for i(); a; p() {}", 1},
+		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); a; p() {}", 1},
+		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); b; p() {}", 0},
+
 		// inc/dec stmts
 		{"$x++", "a[b]++", 1},
 		{"$x--", "a++", 0},

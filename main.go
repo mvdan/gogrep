@@ -27,6 +27,8 @@ Options:
 A command is of the form "-A pattern", where -A is one of:
 
   -x   find all nodes matching a pattern
+  -g   discard nodes not matching a pattern
+  -v   discard nodes matching a pattern
 
 If -A is ommitted for a single command, -x will be assumed.
 

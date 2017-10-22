@@ -92,10 +92,12 @@ type matcher struct {
 }
 
 type varInfo struct {
-	name    string
-	any     bool
-	nameRxs []*regexp.Regexp
-	types   []ast.Expr
+	name     string
+	any      bool
+	nameRxs  []*regexp.Regexp
+	needExpr bool
+	types    []ast.Expr
+	comp     bool
 }
 
 func (m *matcher) info(id int) varInfo {

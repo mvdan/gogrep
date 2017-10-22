@@ -156,8 +156,10 @@ ops:
 				return wt, fmt.Errorf("%v: %v", wt.pos, err)
 			}
 			info.nameRxs = append(info.nameRxs, rx)
-		case t.lit == "type":
+		case t.lit == "type", t.lit == "comp":
+			cmd := t.lit
 			m.typed = true
+			info.needExpr = true
 			if t = next(); t.tok != token.LPAREN {
 				return wt, fmt.Errorf("%v: wanted (", wt.pos)
 			}
@@ -174,13 +176,22 @@ ops:
 				}
 			}
 			end := t.pos.Offset - 1
-			typeStr := string(src[start:end])
-			typeExpr, err := parser.ParseExpr(typeStr)
-			if err != nil {
-				return wt, fmt.Errorf("%v: could not parse expr %q: %v",
-					wt.pos, typeStr, err)
+			typeStr := strings.TrimSpace(string(src[start:end]))
+			switch cmd {
+			case "comp":
+				if typeStr != "" {
+					return wt, fmt.Errorf("%v: %s does not take an argument",
+						wt.pos, t.lit)
+				}
+				info.comp = true
+			default:
+				typeExpr, err := parser.ParseExpr(typeStr)
+				if err != nil {
+					return wt, fmt.Errorf("%v: could not parse expr %q: %v",
+						wt.pos, typeStr, err)
+				}
+				info.types = append(info.types, typeExpr)
 			}
-			info.types = append(info.types, typeExpr)
 		default:
 			break ops
 		}

@@ -67,9 +67,11 @@ func TestMatch(t *testing.T) {
 		{"$(x /.*foo.*/ /.*bar.*/)", "foobar; barfoo; foo; barbar", 2},
 
 		// type constraints
-		{"$(x type(int))", "package p; var i int", 2}, // includes "int"...
+		{"$(x type(int))", "package p; var i int", 2}, // includes "int" the type
 		{"append($(x type([]int)))", "package p; var _ = append([]int32{3})", 0},
 		{"append($(x type([]int)))", "package p; var _ = append([]int{3})", 1},
+		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
+		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},

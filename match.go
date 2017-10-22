@@ -169,18 +169,21 @@ func (m *matcher) node(expr, node ast.Node) bool {
 				return false
 			}
 		}
-		if len(info.types) > 0 {
+		if info.needExpr {
 			expr, _ := node.(ast.Expr)
 			if expr == nil {
 				return false // only exprs have types
 			}
 			// TODO: likely want a better mechanism that
 			// strings
-			gotType := m.Info.TypeOf(expr)
-			if gotType == nil {
+			t := m.Info.TypeOf(expr)
+			if t == nil {
 				return false // an expr, but no type?
 			}
-			got := gotType.String()
+			if info.comp && !types.Comparable(t) {
+				return false
+			}
+			got := t.String()
 			for _, typ := range info.types {
 				want := types.ExprString(typ)
 				if want != got {

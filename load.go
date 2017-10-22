@@ -23,6 +23,7 @@ type nodeLoader struct {
 }
 
 type loadPkg struct {
+	path  string
 	nodes []ast.Node
 	info  types.Info
 }
@@ -31,13 +32,13 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
 	var pkgs []loadPkg
-	var curNodes []ast.Node
+	var cur loadPkg
 	addFile := func(path string) error {
 		f, err := parser.ParseFile(l.fset, path, nil, 0)
 		if err != nil {
 			return err
 		}
-		curNodes = append(curNodes, f)
+		cur.nodes = append(cur.nodes, f)
 		return nil
 	}
 	done := map[string]bool{}
@@ -46,9 +47,9 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 		if done[path] {
 			return nil
 		}
-		if len(curNodes) > 0 {
-			pkgs = append(pkgs, loadPkg{nodes: curNodes})
-			curNodes = nil
+		if len(cur.nodes) > 0 {
+			pkgs = append(pkgs, cur)
+			cur = loadPkg{path: path}
 		}
 		done[path] = true
 		pkg, err := l.ctx.Import(path, l.wd, 0)
@@ -92,9 +93,8 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 			return nil, err
 		}
 	}
-	if len(curNodes) > 0 {
-		pkgs = append(pkgs, loadPkg{nodes: curNodes})
-		curNodes = nil
+	if len(cur.nodes) > 0 {
+		pkgs = append(pkgs, cur)
 	}
 	return pkgs, nil
 }
@@ -121,7 +121,7 @@ func (l nodeLoader) typed(args []string, recurse bool) ([]loadPkg, error) {
 	}
 	var pkgs []loadPkg
 	for _, pkg := range prog.InitialPackages() {
-		lpkg := loadPkg{info: pkg.Info}
+		lpkg := loadPkg{path: pkg.Pkg.Path(), info: pkg.Info}
 		for _, file := range pkg.Files {
 			lpkg.nodes = append(lpkg.nodes, file)
 		}

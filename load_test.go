@@ -58,9 +58,22 @@ func TestLoad(t *testing.T) {
 				testdata/src/p1/file1.go:3:1: var _ = "file1"
 			`,
 		},
-		// TODO: add typed variants for these
+		{
+			[]string{"-x", "var _ = $(x type(int))", "p1"},
+			``, // different type
+		},
 		{
 			[]string{"-x", "var _ = $x", "p1/..."},
+			`
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
+				testdata/src/p1/p3/testp/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+			`,
+		},
+		{
+			[]string{"-x", "var _ = $(x type(string))", "p1/..."},
 			`
 				testdata/src/p1/file1.go:3:1: var _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"

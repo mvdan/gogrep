@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -141,6 +142,9 @@ func (m *matcher) fromArgs(args []string) error {
 	if err != nil {
 		return err
 	}
+	sort.Slice(pkgs, func(i, j int) bool {
+		return pkgs[i].path < pkgs[j].path
+	})
 	var all []ast.Node
 	for _, pkg := range pkgs {
 		m.Info = pkg.info

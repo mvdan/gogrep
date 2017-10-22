@@ -127,22 +127,12 @@ func (m *matcher) fromArgs(args []string) error {
 	if err != nil {
 		return err
 	}
-	var all []ast.Node
 	loader := nodeLoader{wd, m.ctx, fset}
-	if !m.typed {
-		nodes, err := loader.untyped(paths, m.recursive)
-		if err != nil {
-			return err
-		}
-		all = append(all, m.matches(cmds, nodes)...)
-	} else {
-		nodes, err := loader.typed(paths, m.recursive)
-		if err != nil {
-			return err
-		}
-		all = append(all, m.matches(cmds, nodes)...)
+	nodes, err := loader.load(paths, m.recursive, m.typed)
+	if err != nil {
+		return err
 	}
-	for _, n := range all {
+	for _, n := range m.matches(cmds, nodes) {
 		fpos := loader.fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]

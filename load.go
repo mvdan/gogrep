@@ -21,6 +21,13 @@ type nodeLoader struct {
 	fset *token.FileSet
 }
 
+func (l nodeLoader) load(args []string, recurse, typed bool) ([]ast.Node, error) {
+	if typed {
+		return l.typed(args, recurse)
+	}
+	return l.untyped(args, recurse)
+}
+
 func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
 	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)

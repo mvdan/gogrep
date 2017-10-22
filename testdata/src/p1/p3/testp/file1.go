@@ -1,3 +1,3 @@
 package testp
 
-const _ = "file1"
+var _ = "file1"

@@ -1,3 +1,3 @@
 package p2
 
-const _ = "file2"
+var _ = "file2"

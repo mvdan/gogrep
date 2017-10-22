@@ -35,6 +35,7 @@ const (
 )
 
 func (m *matcher) tokenize(src []byte) ([]fullToken, error) {
+	m.typed = false
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))

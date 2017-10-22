@@ -8,6 +8,7 @@ import (
 	"go/build"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"strings"
 
@@ -21,23 +22,22 @@ type nodeLoader struct {
 	fset *token.FileSet
 }
 
-func (l nodeLoader) load(args []string, recurse, typed bool) ([]ast.Node, error) {
-	if typed {
-		return l.typed(args, recurse)
-	}
-	return l.untyped(args, recurse)
+type loadPkg struct {
+	nodes []ast.Node
+	info  types.Info
 }
 
-func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
+func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
-	var nodes []ast.Node
+	var pkgs []loadPkg
+	var curNodes []ast.Node
 	addFile := func(path string) error {
 		f, err := parser.ParseFile(l.fset, path, nil, 0)
 		if err != nil {
 			return err
 		}
-		nodes = append(nodes, f)
+		curNodes = append(curNodes, f)
 		return nil
 	}
 	done := map[string]bool{}
@@ -45,6 +45,10 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
 	addPkg = func(path string, direct bool) error {
 		if done[path] {
 			return nil
+		}
+		if len(curNodes) > 0 {
+			pkgs = append(pkgs, loadPkg{nodes: curNodes})
+			curNodes = nil
 		}
 		done[path] = true
 		pkg, err := l.ctx.Import(path, l.wd, 0)
@@ -88,25 +92,40 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]ast.Node, error) {
 			return nil, err
 		}
 	}
-	return nodes, nil
+	if len(curNodes) > 0 {
+		pkgs = append(pkgs, loadPkg{nodes: curNodes})
+		curNodes = nil
+	}
+	return pkgs, nil
 }
 
-func (l nodeLoader) typed(args []string, recurse bool) ([]ast.Node, error) {
+func (l nodeLoader) typed(args []string, recurse bool) ([]loadPkg, error) {
 	gctx := gotool.Context{BuildContext: *l.ctx}
 	paths := gctx.ImportPaths(args)
 	conf := loader.Config{Fset: l.fset, Cwd: l.wd, Build: l.ctx}
 	if _, err := conf.FromArgs(paths, true); err != nil {
 		return nil, err
 	}
-	prog, err := conf.Load()
-	if err != nil {
-		return nil, err
-	}
-	var nodes []ast.Node
-	for _, pkg := range prog.InitialPackages() {
-		for _, file := range pkg.Files {
-			nodes = append(nodes, file)
+	var terr error
+	conf.TypeChecker.Error = func(err error) {
+		if terr == nil {
+			terr = err
 		}
 	}
-	return nodes, nil
+	prog, err := conf.Load()
+	if err != nil {
+		if terr != nil {
+			return nil, terr
+		}
+		return nil, err
+	}
+	var pkgs []loadPkg
+	for _, pkg := range prog.InitialPackages() {
+		lpkg := loadPkg{info: pkg.Info}
+		for _, file := range pkg.Files {
+			lpkg.nodes = append(lpkg.nodes, file)
+		}
+		pkgs = append(pkgs, lpkg)
+	}
+	return pkgs, nil
 }

@@ -12,7 +12,6 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	baseArgs := []string{"-x", "const _ = $x"}
 	ctx := build.Default
 	ctx.GOPATH = "testdata"
 	m := matcher{ctx: &ctx}
@@ -21,50 +20,69 @@ func TestLoad(t *testing.T) {
 		want interface{}
 	}{
 		{
-			[]string{"testdata/file1.go", "testdata/file2.go"},
+			[]string{"-x", "var _ = $x", "testdata/file1.go", "testdata/file2.go"},
 			`
-				testdata/file1.go:3:1: const _ = "file1"
-				testdata/file2.go:3:1: const _ = "file2"
+				testdata/file1.go:3:1: var _ = "file1"
+				testdata/file2.go:3:1: var _ = "file2"
 			`,
 		},
 		{
-			[]string{"noexist.go"},
+			[]string{"-x", "var _ = $(x type(string))", "testdata/file1.go", "testdata/file2.go"},
+			fmt.Errorf("package p2; expected p1"),
+		},
+		{
+			[]string{"-x", "var _ = $x", "noexist.go"},
 			fmt.Errorf("no such file or directory"),
 		},
 		{
-			[]string{"./testdata"},
+			[]string{"-x", "var _ = $(x type(string))", "noexist.go"},
+			fmt.Errorf("no such file or directory"),
+		},
+		{
+			[]string{"-x", "var _ = $x", "./testdata"},
 			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
 		},
 		{
-			[]string{"p1"},
+			[]string{"-x", "var _ = $(x type(string))", "./testdata"},
+			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
+		},
+		{
+			[]string{"-x", "var _ = $x", "p1"},
 			`
-				testdata/src/p1/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{
-			[]string{"p1/..."},
+			[]string{"-x", "var _ = $(x type(string))", "p1"},
 			`
-				testdata/src/p1/file1.go:3:1: const _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
-				testdata/src/p1/p3/testp/file1.go:3:1: const _ = "file1"
-				testdata/src/p1/testp/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
+			`,
+		},
+		// TODO: add typed variants for these
+		{
+			[]string{"-x", "var _ = $x", "p1/..."},
+			`
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
+				testdata/src/p1/p3/testp/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{
-			[]string{"-r", "p1"},
+			[]string{"-x", "var _ = $x", "-r", "p1"},
 			`
-				testdata/src/p1/file1.go:3:1: const _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: const _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: const _ = "file2"
-				testdata/src/p1/testp/file1.go:3:1: const _ = "file1"
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
+				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer
 		m.out = &buf
-		err := m.fromArgs(append(baseArgs, tc.args...))
+		err := m.fromArgs(tc.args)
 		switch x := tc.want.(type) {
 		case error:
 			if err == nil {

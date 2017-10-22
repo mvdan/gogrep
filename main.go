@@ -132,11 +132,21 @@ func (m *matcher) fromArgs(args []string) error {
 		return err
 	}
 	loader := nodeLoader{wd, m.ctx, fset}
-	nodes, err := loader.load(paths, m.recursive, m.typed)
+	var pkgs []loadPkg
+	if !m.typed {
+		pkgs, err = loader.untyped(paths, m.recursive)
+	} else {
+		pkgs, err = loader.typed(paths, m.recursive)
+	}
 	if err != nil {
 		return err
 	}
-	for _, n := range m.matches(cmds, nodes) {
+	var all []ast.Node
+	for _, pkg := range pkgs {
+		m.Info = pkg.info
+		all = append(all, m.matches(cmds, pkg.nodes)...)
+	}
+	for _, n := range all {
 		fpos := loader.fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]

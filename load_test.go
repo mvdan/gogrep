@@ -91,6 +91,15 @@ func TestLoad(t *testing.T) {
 				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
+		{
+			[]string{"-x", "var _ = $(x type(string))", "-r", "p1"},
+			`
+				testdata/src/p1/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
+				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
+				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+			`,
+		},
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer

@@ -47,11 +47,11 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 		if done[path] {
 			return nil
 		}
+		done[path] = true
 		if len(cur.nodes) > 0 {
 			pkgs = append(pkgs, cur)
 			cur = loadPkg{path: path}
 		}
-		done[path] = true
 		pkg, err := l.ctx.Import(path, l.wd, 0)
 		if err != nil {
 			return err
@@ -120,12 +120,30 @@ func (l nodeLoader) typed(args []string, recurse bool) ([]loadPkg, error) {
 		return nil, err
 	}
 	var pkgs []loadPkg
-	for _, pkg := range prog.InitialPackages() {
-		lpkg := loadPkg{path: pkg.Pkg.Path(), info: pkg.Info}
+	done := map[string]bool{}
+	var addPkg func(tpkg *types.Package) // to recurse into self
+	addPkg = func(tpkg *types.Package) {
+		path := tpkg.Path()
+		if done[path] {
+			return
+		}
+		done[path] = true
+		pkg := prog.Package(path)
+		lpkg := loadPkg{path: path, info: pkg.Info}
 		for _, file := range pkg.Files {
 			lpkg.nodes = append(lpkg.nodes, file)
 		}
 		pkgs = append(pkgs, lpkg)
+		if !recurse {
+			return
+		}
+		// TODO: differentiate direct imports like in untyped?
+		for _, ipkg := range tpkg.Imports() {
+			addPkg(ipkg)
+		}
+	}
+	for _, pkg := range prog.InitialPackages() {
+		addPkg(pkg.Pkg)
 	}
 	return pkgs, nil
 }

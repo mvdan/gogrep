@@ -5,6 +5,7 @@ package main
 
 import (
 	"fmt"
+	"go/parser"
 	"go/scanner"
 	"go/token"
 	"regexp"
@@ -122,8 +123,8 @@ func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte
 	t = next()
 ops:
 	for {
-		switch t.tok {
-		case token.QUO:
+		switch {
+		case t.tok == token.QUO:
 			start := t.pos.Offset + 1
 			rxStr := string(src[start:])
 			end := strings.Index(rxStr, "/")
@@ -154,6 +155,31 @@ ops:
 				return wt, fmt.Errorf("%v: %v", wt.pos, err)
 			}
 			info.nameRxs = append(info.nameRxs, rx)
+		case t.lit == "type":
+			m.typed = true
+			if t = next(); t.tok != token.LPAREN {
+				return wt, fmt.Errorf("%v: wanted (", wt.pos)
+			}
+			t = next()
+			start := t.pos.Offset
+			for open := 1; open > 0; t = next() {
+				switch t.tok {
+				case token.LPAREN:
+					open++
+				case token.RPAREN:
+					open--
+				case token.EOF:
+					return wt, fmt.Errorf("%v: expected ) to close (", wt.pos)
+				}
+			}
+			end := t.pos.Offset - 1
+			typeStr := string(src[start:end])
+			typeExpr, err := parser.ParseExpr(typeStr)
+			if err != nil {
+				return wt, fmt.Errorf("%v: could not parse expr %q: %v",
+					wt.pos, typeStr, err)
+			}
+			info.types = append(info.types, typeExpr)
 		default:
 			break ops
 		}

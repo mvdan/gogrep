@@ -11,6 +11,7 @@ import (
 	"go/build"
 	"go/printer"
 	"go/token"
+	"go/types"
 	"io"
 	"os"
 	"regexp"
@@ -85,12 +86,15 @@ type matcher struct {
 	// node values recorded by name, excluding "_" (used only by the
 	// actual matching phase)
 	values map[string]ast.Node
+
+	types.Info
 }
 
 type varInfo struct {
 	name    string
 	any     bool
 	nameRxs []*regexp.Regexp
+	types   []ast.Expr
 }
 
 func (m *matcher) info(id int) varInfo {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 )
 
 func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
@@ -150,10 +151,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return true
 
 	case *ast.Ident:
-		y, ok := node.(*ast.Ident)
+		y, yok := node.(*ast.Ident)
 		if !isWildName(x.Name) {
 			// not a wildcard
-			return ok && x.Name == y.Name
+			return yok && x.Name == y.Name
 		}
 		if _, ok := node.(ast.Node); !ok {
 			return false // to not include our extra node types
@@ -164,8 +165,27 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return false
 		}
 		for _, rx := range info.nameRxs {
-			if !ok || !rx.MatchString(y.Name) {
+			if !yok || !rx.MatchString(y.Name) {
 				return false
+			}
+		}
+		if len(info.types) > 0 {
+			expr, _ := node.(ast.Expr)
+			if expr == nil {
+				return false // only exprs have types
+			}
+			// TODO: likely want a better mechanism that
+			// strings
+			gotType := m.Info.TypeOf(expr)
+			if gotType == nil {
+				return false // an expr, but no type?
+			}
+			got := gotType.String()
+			for _, typ := range info.types {
+				want := types.ExprString(typ)
+				if want != got {
+					return false
+				}
 			}
 		}
 		if info.name == "_" {

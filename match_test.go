@@ -6,6 +6,8 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
+	"go/types"
 	"testing"
 )
 
@@ -63,6 +65,11 @@ func TestMatch(t *testing.T) {
 		{"$(x /.*/) = $_", "a = b", 1},
 		{"$(x /.*/) = $_", "a.field = b", 0},
 		{"$(x /.*foo.*/ /.*bar.*/)", "foobar; barfoo; foo; barbar", 2},
+
+		// type constraints
+		{"$(x type(int))", "package p; var i int", 2}, // includes "int"...
+		{"append($(x type([]int)))", "package p; var _ = append([]int32{3})", 0},
+		{"append($(x type([]int)))", "package p; var _ = append([]int{3})", 1},
 
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},
@@ -374,6 +381,19 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 	srcNode, srcErr := parse(src)
 	if srcErr != nil {
 		t.Fatal(srcErr)
+	}
+	if m.typed {
+		f := srcNode.(*ast.File)
+		pkg := types.NewPackage("", "")
+		fset := token.NewFileSet()
+		fset.AddFile("", fset.Base(), len(src)*10)
+		m.Info.Types = make(map[ast.Expr]types.TypeAndValue)
+		m.Info.Defs = make(map[*ast.Ident]types.Object)
+		m.Info.Uses = make(map[*ast.Ident]types.Object)
+		check := types.NewChecker(nil, fset, pkg, &m.Info)
+		if err := check.Files([]*ast.File{f}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	matches := m.matches(cmds, []ast.Node{srcNode})
 	switch want := anyWant.(type) {

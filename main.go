@@ -87,6 +87,7 @@ type matcher struct {
 	// node values recorded by name, excluding "_" (used only by the
 	// actual matching phase)
 	values map[string]ast.Node
+	scope  *types.Scope
 
 	types.Info
 }

@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"strconv"
 )
 
 func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
@@ -115,6 +116,12 @@ func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
 }
 
 func (m *matcher) node(expr, node ast.Node) bool {
+	switch node.(type) {
+	case *ast.File, *ast.FuncType, *ast.BlockStmt, *ast.IfStmt,
+		*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.CaseClause,
+		*ast.CommClause, *ast.ForStmt, *ast.RangeStmt:
+		m.scope = m.Info.Scopes[node]
+	}
 	if !m.aggressive {
 		if expr == nil || node == nil {
 			return expr == node
@@ -174,8 +181,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			if expr == nil {
 				return false // only exprs have types
 			}
-			// TODO: likely want a better mechanism that
-			// strings
 			t := m.Info.TypeOf(expr)
 			if t == nil {
 				return false // an expr, but no type?
@@ -183,10 +188,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			if info.comp && !types.Comparable(t) {
 				return false
 			}
-			got := t.String()
 			for _, typ := range info.types {
-				want := types.ExprString(typ)
-				if want != got {
+				want := resolveType(m.scope, typ)
+				if !types.Identical(t, want) {
 					return false
 				}
 			}
@@ -434,6 +438,29 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
 	panic(fmt.Sprintf("unfinished node: %T", expr))
+}
+
+func resolveType(scope *types.Scope, expr ast.Expr) types.Type {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		_, obj := scope.LookupParent(x.Name, token.NoPos)
+		return obj.Type()
+	case *ast.ArrayType:
+		elt := resolveType(scope, x.Elt)
+		if x.Len == nil {
+			return types.NewSlice(elt)
+		}
+		bl, ok := x.Len.(*ast.BasicLit)
+		if !ok || bl.Kind != token.INT {
+			panic(fmt.Sprintf("TODO: %T", x))
+		}
+		len, _ := strconv.ParseInt(bl.Value, 0, 0)
+		return types.NewArray(elt, len)
+	case *ast.StarExpr:
+		return types.NewPointer(resolveType(scope, x.X))
+	default:
+		panic(fmt.Sprintf("TODO: %T", x))
+	}
 }
 
 func maybeNilIdent(x *ast.Ident) ast.Node {

@@ -70,6 +70,11 @@ func TestMatch(t *testing.T) {
 		{"$(x type(int))", "package p; var i int", 2}, // includes "int" the type
 		{"append($(x type([]int)))", "package p; var _ = append([]int32{3})", 0},
 		{"append($(x type([]int)))", "package p; var _ = append([]int{3})", 1},
+		{"var _ = $(_ type([2]int))", "package p; var _ = [...]int{1}", 0},
+		{"var _ = $(_ type([2]int))", "package p; var _ = [...]int{1, 2}", 1},
+		{"var _ = $(_ type([2]int))", "package p; var _ = []int{1, 2}", 0},
+		{"var _ = $(_ type(*int))", "package p; var _ = int(3)", 0},
+		{"var _ = $(_ type(*int))", "package p; var _ = new(int)", 1},
 		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
 		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 
@@ -392,6 +397,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		m.Info.Types = make(map[ast.Expr]types.TypeAndValue)
 		m.Info.Defs = make(map[*ast.Ident]types.Object)
 		m.Info.Uses = make(map[*ast.Ident]types.Object)
+		m.Info.Scopes = make(map[ast.Node]*types.Scope)
 		check := types.NewChecker(nil, fset, pkg, &m.Info)
 		if err := check.Files([]*ast.File{f}); err != nil {
 			t.Fatal(err)

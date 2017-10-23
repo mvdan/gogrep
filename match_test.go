@@ -109,6 +109,27 @@ func TestMatch(t *testing.T) {
 		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
 		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 
+		// underlying types
+		{"var _ = $(_ is(basic))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(basic))", "package p; var _ = 3", 1},
+		{"var _ = $(_ is(basic))", `package p; import "io"; var _ = io.SeekEnd`, 1},
+		{"var _ = $(_ is(array))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(array))", "package p; var _ = [...]byte{}", 1},
+		{"var _ = $(_ is(slice))", "package p; var _ = []byte{}", 1},
+		{"var _ = $(_ is(slice))", "package p; var _ = [...]byte{}", 0},
+		{"var _ = $(_ is(struct))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(struct))", "package p; var _ = struct{}{}", 1},
+		{"var _ = $(_ is(interface))", "package p; var _ = struct{}{}", 0},
+		{"var _ = $(_ is(interface))", "package p; var _ = interface{}(nil)", 1},
+		{"var _ = $(_ is(pointer))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(pointer))", "package p; var _ = new(byte)", 1},
+		{"var _ = $(_ is(func))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(func))", "package p; var _ = func() {}", 1},
+		{"var _ = $(_ is(map))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(map))", "package p; var _ = map[int]int{}", 1},
+		{"var _ = $(_ is(chan))", "package p; var _ = []byte{}", 0},
+		{"var _ = $(_ is(chan))", "package p; var _ = make(chan int)", 1},
+
 		// many value expressions
 		{"$x, $y", "foo(1, 2)", 1},
 		{"$x, $y", "1", 0},

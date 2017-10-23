@@ -161,8 +161,6 @@ ops:
 			}
 			info.nameRxs = append(info.nameRxs, rx)
 		case "type", "asgn", "conv":
-			m.typed = true
-			info.needExpr = true
 			if t = next(); t.tok != token.LPAREN {
 				return wt, fmt.Errorf("%v: wanted (", wt.pos)
 			}
@@ -188,12 +186,26 @@ ops:
 			info.types = append(info.types, typeCheck{
 				op, typeExpr})
 		case "comp":
-			m.typed = true
-			info.needExpr = true
 			info.comp = true
 			if t = next(); t.tok != token.LPAREN {
 				return wt, fmt.Errorf("%v: wanted (", wt.pos)
 			}
+			if t = next(); t.tok != token.RPAREN {
+				return wt, fmt.Errorf("%v: wanted )", wt.pos)
+			}
+			t = next()
+		case "is":
+			if t = next(); t.tok != token.LPAREN {
+				return wt, fmt.Errorf("%v: wanted (", wt.pos)
+			}
+			switch t = next(); t.lit {
+			case "basic", "array", "slice", "struct", "interface",
+				"pointer", "func", "map", "chan":
+			default:
+				return wt, fmt.Errorf("%v: unknown type: %q", wt.pos,
+					t.lit)
+			}
+			info.underlying = t.lit
 			if t = next(); t.tok != token.RPAREN {
 				return wt, fmt.Errorf("%v: wanted )", wt.pos)
 			}
@@ -205,6 +217,9 @@ ops:
 	if t.tok != token.RPAREN {
 		return wt, fmt.Errorf("%v: expected ) to close $(",
 			t.pos)
+	}
+	if info.needExpr() {
+		m.typed = true
 	}
 	m.vars = append(m.vars, info)
 	return wt, nil

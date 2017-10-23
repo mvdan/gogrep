@@ -94,12 +94,16 @@ type matcher struct {
 }
 
 type varInfo struct {
-	name     string
-	any      bool
-	nameRxs  []*regexp.Regexp
-	needExpr bool
-	types    []typeCheck
-	comp     bool
+	name       string
+	any        bool
+	nameRxs    []*regexp.Regexp
+	types      []typeCheck
+	comp       bool
+	underlying string
+}
+
+func (v varInfo) needExpr() bool {
+	return len(v.types) > 0 || v.comp || v.underlying != ""
 }
 
 type typeCheck struct {

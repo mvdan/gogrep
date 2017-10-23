@@ -177,7 +177,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 				return false
 			}
 		}
-		if info.needExpr {
+		if info.needExpr() {
 			expr, _ := node.(ast.Expr)
 			if expr == nil {
 				return false // only exprs have types
@@ -199,6 +199,31 @@ func (m *matcher) node(expr, node ast.Node) bool {
 				case tc.op == "conv" && !types.ConvertibleTo(t, want):
 					return false
 				}
+			}
+			u := t.Underlying()
+			uok := true
+			switch info.underlying {
+			case "basic":
+				_, uok = u.(*types.Basic)
+			case "array":
+				_, uok = u.(*types.Array)
+			case "slice":
+				_, uok = u.(*types.Slice)
+			case "struct":
+				_, uok = u.(*types.Struct)
+			case "interface":
+				_, uok = u.(*types.Interface)
+			case "pointer":
+				_, uok = u.(*types.Pointer)
+			case "func":
+				_, uok = u.(*types.Signature)
+			case "map":
+				_, uok = u.(*types.Map)
+			case "chan":
+				_, uok = u.(*types.Chan)
+			}
+			if !uok {
+				return false
 			}
 		}
 		if info.name == "_" {

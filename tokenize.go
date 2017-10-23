@@ -124,12 +124,10 @@ func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte
 	t = next()
 ops:
 	for {
-		op := t.lit
-		if op == "" {
-			op = t.tok.String()
-		}
-		switch op {
-		case "/":
+		switch t.tok {
+		case token.EOF, token.SEMICOLON, token.RPAREN:
+			break ops
+		case token.QUO:
 			start := t.pos.Offset + 1
 			rxStr := string(src[start:])
 			end := strings.Index(rxStr, "/")
@@ -160,10 +158,15 @@ ops:
 				return wt, fmt.Errorf("%v: %v", wt.pos, err)
 			}
 			info.nameRxs = append(info.nameRxs, rx)
+			continue
+		}
+
+		op := t.lit
+		if t = next(); t.tok != token.LPAREN {
+			return wt, fmt.Errorf("%v: wanted (", wt.pos)
+		}
+		switch op {
 		case "type", "asgn", "conv":
-			if t = next(); t.tok != token.LPAREN {
-				return wt, fmt.Errorf("%v: wanted (", wt.pos)
-			}
 			t = next()
 			start := t.pos.Offset
 			for open := 1; open > 0; t = next() {
@@ -185,19 +188,10 @@ ops:
 			}
 			info.types = append(info.types, typeCheck{
 				op, typeExpr})
+			continue
 		case "comp", "addr":
 			info.extras = append(info.extras, op)
-			if t = next(); t.tok != token.LPAREN {
-				return wt, fmt.Errorf("%v: wanted (", wt.pos)
-			}
-			if t = next(); t.tok != token.RPAREN {
-				return wt, fmt.Errorf("%v: wanted )", wt.pos)
-			}
-			t = next()
 		case "is":
-			if t = next(); t.tok != token.LPAREN {
-				return wt, fmt.Errorf("%v: wanted (", wt.pos)
-			}
 			switch t = next(); t.lit {
 			case "basic", "array", "slice", "struct", "interface",
 				"pointer", "func", "map", "chan":
@@ -206,13 +200,13 @@ ops:
 					t.lit)
 			}
 			info.underlying = t.lit
-			if t = next(); t.tok != token.RPAREN {
-				return wt, fmt.Errorf("%v: wanted )", wt.pos)
-			}
-			t = next()
 		default:
 			break ops
 		}
+		if t = next(); t.tok != token.RPAREN {
+			return wt, fmt.Errorf("%v: wanted )", wt.pos)
+		}
+		t = next()
 	}
 	if t.tok != token.RPAREN {
 		return wt, fmt.Errorf("%v: expected ) to close $(",

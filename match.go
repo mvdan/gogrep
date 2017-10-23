@@ -268,7 +268,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.CallExpr:
 		y, ok := node.(*ast.CallExpr)
 		return ok && m.node(x.Fun, y.Fun) && m.exprs(x.Args, y.Args) &&
-			m.noPos(x.Ellipsis, y.Ellipsis)
+			bothValid(x.Ellipsis, y.Ellipsis)
 	case *ast.KeyValueExpr:
 		y, ok := node.(*ast.KeyValueExpr)
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value)
@@ -483,8 +483,8 @@ func maybeNilIdent(x *ast.Ident) ast.Node {
 	return x
 }
 
-func (m *matcher) noPos(p1, p2 token.Pos) bool {
-	return (p1 == token.NoPos) == (p2 == token.NoPos)
+func bothValid(p1, p2 token.Pos) bool {
+	return p1.IsValid() == p2.IsValid()
 }
 
 type nodeList interface {

@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/importer"
 	"go/token"
 	"go/types"
 	"testing"
@@ -75,6 +76,14 @@ func TestMatch(t *testing.T) {
 		{"var _ = $(_ type([2]int))", "package p; var _ = []int{1, 2}", 0},
 		{"var _ = $(_ type(*int))", "package p; var _ = int(3)", 0},
 		{"var _ = $(_ type(*int))", "package p; var _ = new(int)", 1},
+		{
+			"var _ = $(_ type(io.Reader))",
+			`package p; import "io"; var _ = io.Writer(nil)`, 0,
+		},
+		{
+			"var _ = $(_ type(io.Reader))",
+			`package p; import "io"; var _ = io.Reader(nil)`, 1,
+		},
 		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
 		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 
@@ -398,7 +407,8 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		m.Info.Defs = make(map[*ast.Ident]types.Object)
 		m.Info.Uses = make(map[*ast.Ident]types.Object)
 		m.Info.Scopes = make(map[ast.Node]*types.Scope)
-		check := types.NewChecker(nil, fset, pkg, &m.Info)
+		config := &types.Config{Importer: importer.Default()}
+		check := types.NewChecker(config, fset, pkg, &m.Info)
 		if err := check.Files([]*ast.File{f}); err != nil {
 			t.Fatal(err)
 		}

@@ -458,8 +458,21 @@ func resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		return types.NewArray(elt, len)
 	case *ast.StarExpr:
 		return types.NewPointer(resolveType(scope, x.X))
+	case *ast.SelectorExpr:
+		scope = findScope(scope, x.X)
+		return resolveType(scope, x.Sel)
 	default:
-		panic(fmt.Sprintf("TODO: %T", x))
+		panic(fmt.Sprintf("resolveType TODO: %T", x))
+	}
+}
+
+func findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
+	switch x := expr.(type) {
+	case *ast.Ident:
+		_, obj := scope.LookupParent(x.Name, token.NoPos)
+		return obj.(*types.PkgName).Imported().Scope()
+	default:
+		panic(fmt.Sprintf("findScope TODO: %T", x))
 	}
 }
 

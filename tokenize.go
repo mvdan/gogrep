@@ -124,8 +124,12 @@ func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte
 	t = next()
 ops:
 	for {
-		switch {
-		case t.tok == token.QUO:
+		op := t.lit
+		if op == "" {
+			op = t.tok.String()
+		}
+		switch op {
+		case "/":
 			start := t.pos.Offset + 1
 			rxStr := string(src[start:])
 			end := strings.Index(rxStr, "/")
@@ -156,9 +160,7 @@ ops:
 				return wt, fmt.Errorf("%v: %v", wt.pos, err)
 			}
 			info.nameRxs = append(info.nameRxs, rx)
-		case t.lit == "type", t.lit == "asgn", t.lit == "conv",
-			t.lit == "comp":
-			op := t.lit
+		case "type", "asgn", "conv":
 			m.typed = true
 			info.needExpr = true
 			if t = next(); t.tok != token.LPAREN {
@@ -178,22 +180,24 @@ ops:
 			}
 			end := t.pos.Offset - 1
 			typeStr := strings.TrimSpace(string(src[start:end]))
-			switch op {
-			case "comp":
-				if typeStr != "" {
-					return wt, fmt.Errorf("%v: %s does not take an argument",
-						wt.pos, t.lit)
-				}
-				info.comp = true
-			default:
-				typeExpr, err := parser.ParseExpr(typeStr)
-				if err != nil {
-					return wt, fmt.Errorf("%v: could not parse expr %q: %v",
-						wt.pos, typeStr, err)
-				}
-				info.types = append(info.types, typeCheck{
-					op, typeExpr})
+			typeExpr, err := parser.ParseExpr(typeStr)
+			if err != nil {
+				return wt, fmt.Errorf("%v: could not parse expr %q: %v",
+					wt.pos, typeStr, err)
 			}
+			info.types = append(info.types, typeCheck{
+				op, typeExpr})
+		case "comp":
+			m.typed = true
+			info.needExpr = true
+			info.comp = true
+			if t = next(); t.tok != token.LPAREN {
+				return wt, fmt.Errorf("%v: wanted (", wt.pos)
+			}
+			if t = next(); t.tok != token.RPAREN {
+				return wt, fmt.Errorf("%v: wanted )", wt.pos)
+			}
+			t = next()
 		default:
 			break ops
 		}

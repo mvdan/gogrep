@@ -67,7 +67,7 @@ func TestMatch(t *testing.T) {
 		{"$(x /.*/) = $_", "a.field = b", 0},
 		{"$(x /.*foo.*/ /.*bar.*/)", "foobar; barfoo; foo; barbar", 2},
 
-		// type constraints
+		// type equality
 		{"$(x type(int))", "package p; var i int", 2}, // includes "int" the type
 		{"append($(x type([]int)))", "package p; var _ = append([]int32{3})", 0},
 		{"append($(x type([]int)))", "package p; var _ = append([]int{3})", 1},
@@ -84,6 +84,28 @@ func TestMatch(t *testing.T) {
 			"var _ = $(_ type(io.Reader))",
 			`package p; import "io"; var _ = io.Reader(nil)`, 1,
 		},
+
+		// type assignability
+		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
+		// TODO: how come "untyped int" is not assignable to
+		// "int"?
+		// {"const _ = $(x asgn(int))", "package p; const _ = 3", 1},
+		{
+			"var $(x type(io.Reader)) $_",
+			`package p; import ("io"; "os"); var f *os.File; var _ io.Reader = f`, 0,
+		},
+		{
+			"var $(x asgn(io.Reader)) $_",
+			`package p; import ("io"; "os"); var f *os.File; var _ io.Reader = f`, 1,
+		},
+
+		// type conversions
+		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
+		{"const _ = $(x conv(int))", "package p; const _ = 3", 1},
+		{"var $(x type(int)) $_", "package p; type I int; var i I", 0},
+		{"var $(x conv(int)) $_", "package p; type I int; var i I", 1},
+
+		// comparable types
 		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
 		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 

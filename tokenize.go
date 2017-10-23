@@ -156,8 +156,9 @@ ops:
 				return wt, fmt.Errorf("%v: %v", wt.pos, err)
 			}
 			info.nameRxs = append(info.nameRxs, rx)
-		case t.lit == "type", t.lit == "comp":
-			cmd := t.lit
+		case t.lit == "type", t.lit == "asgn", t.lit == "conv",
+			t.lit == "comp":
+			op := t.lit
 			m.typed = true
 			info.needExpr = true
 			if t = next(); t.tok != token.LPAREN {
@@ -177,7 +178,7 @@ ops:
 			}
 			end := t.pos.Offset - 1
 			typeStr := strings.TrimSpace(string(src[start:end]))
-			switch cmd {
+			switch op {
 			case "comp":
 				if typeStr != "" {
 					return wt, fmt.Errorf("%v: %s does not take an argument",
@@ -190,7 +191,8 @@ ops:
 					return wt, fmt.Errorf("%v: could not parse expr %q: %v",
 						wt.pos, typeStr, err)
 				}
-				info.types = append(info.types, typeExpr)
+				info.types = append(info.types, typeCheck{
+					op, typeExpr})
 			}
 		default:
 			break ops

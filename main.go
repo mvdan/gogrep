@@ -97,8 +97,13 @@ type varInfo struct {
 	any      bool
 	nameRxs  []*regexp.Regexp
 	needExpr bool
-	types    []ast.Expr
+	types    []typeCheck
 	comp     bool
+}
+
+type typeCheck struct {
+	op   string // "type", "asgn", "conv"
+	expr ast.Expr
 }
 
 func (m *matcher) info(id int) varInfo {

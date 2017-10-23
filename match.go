@@ -188,9 +188,14 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			if info.comp && !types.Comparable(t) {
 				return false
 			}
-			for _, typ := range info.types {
-				want := resolveType(m.scope, typ)
-				if !types.Identical(t, want) {
+			for _, tc := range info.types {
+				want := resolveType(m.scope, tc.expr)
+				switch {
+				case tc.op == "type" && !types.Identical(t, want):
+					return false
+				case tc.op == "asgn" && !types.AssignableTo(t, want):
+					return false
+				case tc.op == "conv" && !types.ConvertibleTo(t, want):
 					return false
 				}
 			}

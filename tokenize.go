@@ -201,7 +201,7 @@ ops:
 			}
 			info.underlying = t.lit
 		default:
-			break ops
+			return wt, fmt.Errorf("%v: unknown op %q", wt.pos, op)
 		}
 		if t = next(); t.tok != token.RPAREN {
 			return wt, fmt.Errorf("%v: wanted )", wt.pos)

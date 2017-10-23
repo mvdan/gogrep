@@ -24,21 +24,25 @@ func TestMatch(t *testing.T) {
 		anyWant interface{}
 	}{
 		// expr tokenize errors
-		{"$", "a", tokErr("1:2: $ must be followed by ident, got EOF")},
-		{`"`, "a", tokErr("1:1: string literal not terminated")},
-		{"", "a", parseErr("empty source code")},
-		{"\t", "a", parseErr("empty source code")},
-		{"$(x", "a", tokErr("1:4: expected ) to close $(")},
-		{"$(x /expr", "a", tokErr("1:5: expected / to terminate regex")},
+		{"$", "a", tokErr(`1:2: $ must be followed by ident, got EOF`)},
+		{`"`, "a", tokErr(`1:1: string literal not terminated`)},
+		{"", "a", parseErr(`empty source code`)},
+		{"\t", "a", parseErr(`empty source code`)},
+		{"$(x", "a", tokErr(`1:4: expected ) to close $(`)},
+		{"$(x /expr", "a", tokErr(`1:5: expected / to terminate regex`)},
 		{"$(x /foo(bar/)", "a", tokErr("1:1: error parsing regexp: missing closing ): `^foo(bar$`")},
+		{"$(x a", "a", tokErr(`1:1: wanted (`)},
+		{"$(x a(", "a", tokErr(`1:1: unknown op "a"`)},
+		{"$(x comp(", "a", tokErr(`1:1: wanted )`)},
+		{"$(x is(foo))", "a", tokErr(`1:1: unknown type: "foo"`)},
 
 		// expr parse errors
-		{"foo)", "a", parseErr("1:4: expected statement, found ')'")},
-		{"{", "a", parseErr("1:4: expected '}', found 'EOF'")},
-		{"$x)", "a", parseErr("1:3: expected statement, found ')'")},
-		{"$x(", "a", parseErr("1:5: expected operand, found '}'")},
-		{"$*x)", "a", parseErr("1:4: expected statement, found ')'")},
-		{"a\n$x)", "a", parseErr("2:3: expected statement, found ')'")},
+		{"foo)", "a", parseErr(`1:4: expected statement, found ')'`)},
+		{"{", "a", parseErr(`1:4: expected '}', found 'EOF'`)},
+		{"$x)", "a", parseErr(`1:3: expected statement, found ')'`)},
+		{"$x(", "a", parseErr(`1:5: expected operand, found '}'`)},
+		{"$*x)", "a", parseErr(`1:4: expected statement, found ')'`)},
+		{"a\n$x)", "a", parseErr(`2:3: expected statement, found ')'`)},
 
 		// basic lits
 		{"123", "123", 1},
@@ -98,10 +102,16 @@ func TestMatch(t *testing.T) {
 			"var $(x asgn(io.Reader)) $_",
 			`package p; import "os"; var f *os.File`, 1,
 		},
+		{
+			"var $(x asgn(io.Writer)) $_",
+			`package p; import "io"; var r io.Reader`, 0,
+		},
 
 		// type conversions
 		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
 		{"const _ = $(x conv(int))", "package p; const _ = 3", 1},
+		{"const _ = $(x conv(int32))", "package p; const _ = 3", 1},
+		{"const _ = $(x conv([]byte))", "package p; const _ = 3", 0},
 		{"var $(x type(int)) $_", "package p; type I int; var i I", 0},
 		{"var $(x conv(int)) $_", "package p; type I int; var i I", 1},
 

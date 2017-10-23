@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/importer"
 	"go/token"
 	"go/types"
 	"strconv"
@@ -189,7 +190,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 				return false
 			}
 			for _, tc := range info.types {
-				want := resolveType(m.scope, tc.expr)
+				want := m.resolveType(m.scope, tc.expr)
 				switch {
 				case tc.op == "type" && !types.Identical(t, want):
 					return false
@@ -445,13 +446,13 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	panic(fmt.Sprintf("unfinished node: %T", expr))
 }
 
-func resolveType(scope *types.Scope, expr ast.Expr) types.Type {
+func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		_, obj := scope.LookupParent(x.Name, token.NoPos)
 		return obj.Type()
 	case *ast.ArrayType:
-		elt := resolveType(scope, x.Elt)
+		elt := m.resolveType(scope, x.Elt)
 		if x.Len == nil {
 			return types.NewSlice(elt)
 		}
@@ -462,20 +463,31 @@ func resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		len, _ := strconv.ParseInt(bl.Value, 0, 0)
 		return types.NewArray(elt, len)
 	case *ast.StarExpr:
-		return types.NewPointer(resolveType(scope, x.X))
+		return types.NewPointer(m.resolveType(scope, x.X))
 	case *ast.SelectorExpr:
-		scope = findScope(scope, x.X)
-		return resolveType(scope, x.Sel)
+		scope = m.findScope(scope, x.X)
+		return m.resolveType(scope, x.Sel)
 	default:
 		panic(fmt.Sprintf("resolveType TODO: %T", x))
 	}
 }
 
-func findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
+func (m *matcher) findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		_, obj := scope.LookupParent(x.Name, token.NoPos)
-		return obj.(*types.PkgName).Imported().Scope()
+		if pkg, ok := obj.(*types.PkgName); ok {
+			return pkg.Imported().Scope()
+		}
+		// try to fall back to std
+		if m.stdImporter == nil {
+			m.stdImporter = importer.Default()
+		}
+		pkg, err := m.stdImporter.Import(x.Name)
+		if err != nil {
+			panic(fmt.Sprintf("findScope err: %v", err))
+		}
+		return pkg.Scope()
 	default:
 		panic(fmt.Sprintf("findScope TODO: %T", x))
 	}

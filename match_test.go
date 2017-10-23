@@ -92,11 +92,11 @@ func TestMatch(t *testing.T) {
 		// {"const _ = $(x asgn(int))", "package p; const _ = 3", 1},
 		{
 			"var $(x type(io.Reader)) $_",
-			`package p; import ("io"; "os"); var f *os.File; var _ io.Reader = f`, 0,
+			`package p; import "os"; var f *os.File`, 0,
 		},
 		{
 			"var $(x asgn(io.Reader)) $_",
-			`package p; import ("io"; "os"); var f *os.File; var _ io.Reader = f`, 1,
+			`package p; import "os"; var f *os.File`, 1,
 		},
 
 		// type conversions

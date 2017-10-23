@@ -90,6 +90,7 @@ type matcher struct {
 	scope  *types.Scope
 
 	types.Info
+	stdImporter types.Importer
 }
 
 type varInfo struct {

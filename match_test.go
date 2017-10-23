@@ -109,6 +109,13 @@ func TestMatch(t *testing.T) {
 		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
 		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
 
+		// addressable expressions
+		{"var _ = $(_ addr())", "package p; var _ = []byte{0}", 0},
+		{
+			"var _ = $(_ addr())",
+			"package p; var s struct { i int }; var _ = s.i", 1,
+		},
+
 		// underlying types
 		{"var _ = $(_ is(basic))", "package p; var _ = []byte{}", 0},
 		{"var _ = $(_ is(basic))", "package p; var _ = 3", 1},

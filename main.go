@@ -98,12 +98,12 @@ type varInfo struct {
 	any        bool
 	nameRxs    []*regexp.Regexp
 	types      []typeCheck
-	comp       bool
+	extras     []string
 	underlying string
 }
 
 func (v varInfo) needExpr() bool {
-	return len(v.types) > 0 || v.comp || v.underlying != ""
+	return len(v.types) > 0 || len(v.extras) > 0 || v.underlying != ""
 }
 
 type typeCheck struct {

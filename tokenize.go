@@ -185,8 +185,8 @@ ops:
 			}
 			info.types = append(info.types, typeCheck{
 				op, typeExpr})
-		case "comp":
-			info.comp = true
+		case "comp", "addr":
+			info.extras = append(info.extras, op)
 			if t = next(); t.tok != token.LPAREN {
 				return wt, fmt.Errorf("%v: wanted (", wt.pos)
 			}

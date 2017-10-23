@@ -186,9 +186,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			if t == nil {
 				return false // an expr, but no type?
 			}
-			if info.comp && !types.Comparable(t) {
-				return false
-			}
+			tv := m.Info.Types[expr]
 			for _, tc := range info.types {
 				want := m.resolveType(m.scope, tc.expr)
 				switch {
@@ -197,6 +195,14 @@ func (m *matcher) node(expr, node ast.Node) bool {
 				case tc.op == "asgn" && !types.AssignableTo(t, want):
 					return false
 				case tc.op == "conv" && !types.ConvertibleTo(t, want):
+					return false
+				}
+			}
+			for _, op := range info.extras {
+				switch {
+				case op == "comp" && !types.Comparable(t):
+					return false
+				case op == "addr" && !tv.Addressable():
 					return false
 				}
 			}

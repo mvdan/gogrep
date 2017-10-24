@@ -106,6 +106,14 @@ func TestMatch(t *testing.T) {
 			"var $(x asgn(io.Writer)) $_",
 			`package p; import "io"; var r io.Reader`, 0,
 		},
+		{
+			"var $_ $_ = $(x asgn(*url.URL))",
+			`package p; var _ interface{} = 0`, 0,
+		},
+		{
+			"var $_ $_ = $(x asgn(*url.URL))",
+			`package p; var _ interface{} = nil`, 1,
+		},
 
 		// type conversions
 		{"const _ = $(x type(int))", "package p; const _ = 3", 0},

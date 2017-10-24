@@ -90,6 +90,10 @@ func TestMatch(t *testing.T) {
 			"var _ = $(_ type(io.Reader))",
 			`package p; import "io"; var _ = io.Reader(nil)`, 1,
 		},
+		{
+			"$(_ type(int))",
+			`package p; type I int; func (i I) p() { print(i) }`, 1,
+		},
 
 		// type assignability
 		{"const _ = $(x type(int))", "package p; const _ = 3", 0},

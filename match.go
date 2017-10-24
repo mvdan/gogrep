@@ -114,7 +114,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.File, *ast.FuncType, *ast.BlockStmt, *ast.IfStmt,
 		*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.CaseClause,
 		*ast.CommClause, *ast.ForStmt, *ast.RangeStmt:
-		m.scope = m.Info.Scopes[node]
+		if scope := m.Info.Scopes[node]; scope != nil {
+			m.scope = scope
+		}
 	}
 	if !m.aggressive {
 		if expr == nil || node == nil {

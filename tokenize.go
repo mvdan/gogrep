@@ -15,8 +15,6 @@ import (
 
 const (
 	_ token.Token = -iota
-	tokWild
-	tokWildAny
 	tokAggressive
 )
 
@@ -183,8 +181,7 @@ ops:
 			typeStr := strings.TrimSpace(string(src[start:end]))
 			typeExpr, err := parser.ParseExpr(typeStr)
 			if err != nil {
-				return wt, fmt.Errorf("%v: could not parse expr %q: %v",
-					wt.pos, typeStr, err)
+				return wt, err
 			}
 			info.types = append(info.types, typeCheck{
 				op, typeExpr})

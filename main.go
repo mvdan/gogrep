@@ -319,10 +319,6 @@ func (l *lineColBuffer) WriteString(s string) (n int, err error) {
 	return l.Buffer.WriteString(s)
 }
 
-func (m *matcher) compileCmds(cmds []exprCmd) error {
-	return nil
-}
-
 func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
 	toks, err := m.tokenize([]byte(expr))
 	if err != nil {

@@ -35,6 +35,8 @@ func TestMatch(t *testing.T) {
 		{"$(x a(", "a", tokErr(`1:1: unknown op "a"`)},
 		{"$(x comp(", "a", tokErr(`1:1: wanted )`)},
 		{"$(x is(foo))", "a", tokErr(`1:1: unknown type: "foo"`)},
+		{"$(x type(", "a", tokErr(`1:1: expected ) to close (`)},
+		{"$(x type({))", "a", tokErr(`1:1: expected operand, found '{'`)},
 
 		// expr parse errors
 		{"foo)", "a", parseErr(`1:4: expected statement, found ')'`)},

@@ -16,6 +16,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -232,8 +233,41 @@ func (b *bufferJoinLines) Write(p []byte) (n int, err error) {
 	return
 }
 
+// inspect is like ast.Inspect, but it supports our extra nodeList Node
+// type (only at the top level).
+func inspect(node ast.Node, fn func(ast.Node) bool) {
+	// ast.Walk barfs on ast.Node types it doesn't know, so
+	// do the first level manually here
+	list, ok := node.(nodeList)
+	if !ok {
+		ast.Inspect(node, fn)
+		return
+	}
+	if !fn(list) {
+		return
+	}
+	for i := 0; i < list.len(); i++ {
+		ast.Inspect(list.at(i), fn)
+	}
+	fn(nil)
+}
+
 func singleLinePrint(node ast.Node) string {
 	var buf bufferJoinLines
+	inspect(node, func(node ast.Node) bool {
+		bl, ok := node.(*ast.BasicLit)
+		if !ok || bl.Kind != token.STRING {
+			return true
+		}
+		if !strings.HasPrefix(bl.Value, "`") {
+			return true
+		}
+		if !strings.Contains(bl.Value, "\n") {
+			return true
+		}
+		bl.Value = strconv.Quote(bl.Value[1 : len(bl.Value)-1])
+		return true
+	})
 	printNode(&buf, token.NewFileSet(), node)
 	return buf.String()
 }

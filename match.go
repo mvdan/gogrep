@@ -86,8 +86,6 @@ func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 		}
 		return true
 	}
-	// ast.Walk barfs on ast.Node types it doesn't know, so
-	// do the first level manually here
 	if list, ok := node.(nodeList); ok {
 		if e, ok := exprNode.(ast.Expr); ok {
 			// so that "$*a" will match "a, b"
@@ -95,13 +93,8 @@ func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 			// so that "$*a" will match "a; b"
 			fn(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
 		}
-		fn(exprNode, list)
-		for i := 0; i < list.len(); i++ {
-			ast.Inspect(list.at(i), visit)
-		}
-	} else {
-		ast.Inspect(node, visit)
 	}
+	inspect(node, visit)
 }
 
 func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {

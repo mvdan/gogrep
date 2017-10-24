@@ -100,6 +100,13 @@ func TestLoad(t *testing.T) {
 				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
+		{
+			[]string{"-x", "var _ = $x", "testdata/longstr.go"},
+			`
+				testdata/longstr.go:3:1: var _ = ` + "`single line`" + `
+				testdata/longstr.go:4:1: var _ = "some\nmultiline\nstring"
+			`,
+		},
 	}
 	for _, tc := range tests {
 		var buf bytes.Buffer

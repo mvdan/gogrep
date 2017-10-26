@@ -273,6 +273,8 @@ func TestMatch(t *testing.T) {
 		{"$*_; b; $*_", "{a; b; c; d}", "a; b; c; d"},
 		{"{$*_; $x}", "{a; b; c}", 1},
 		{"{b; c}", "{a; b; c}", 0},
+		{"$x := $_; $x = $_", "a := n; b := n; b = m", "b := n; b = m"},
+		{"$x := $_; $*_; $x = $_", "a := n; b := n; b = m", "b := n; b = m"},
 
 		// mixing lists
 		{"$x, $y", "1; 2", 0},

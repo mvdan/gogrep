@@ -667,21 +667,44 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 		}
 		return nil
 	}
-	// We need to keep a copy of m.values so that we can restart
-	// with a different "any of" match while discarding any matches
-	// we found while trying it.
-	var oldMatches map[string]ast.Node
-	backupMatches := func() {
-		oldMatches = make(map[string]ast.Node, len(m.values))
-		for k, v := range m.values {
-			oldMatches[k] = v
-		}
-	}
-	backupMatches()
-
 	partialStart, partialEnd := 0, ns2len
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
+
+	// We need to keep a copy of m.values so that we can restart
+	// with a different "any of" match while discarding any matches
+	// we found while trying it.
+	type restart struct {
+		matches      map[string]ast.Node
+		next1, next2 int
+	}
+	// We need to stack these because otherwise some edge cases
+	// would not match properly. Since we have various kinds of
+	// wildcards (nodes containing them, $_, and $*_), in some cases
+	// we may have to go back and do multiple restarts to get to the
+	// right starting position.
+	var stack []restart
+	push := func(n1, n2 int) {
+		if n2 > ns2len {
+			return // would be discarded anyway
+		}
+		bk := make(map[string]ast.Node, len(m.values))
+		for k, v := range m.values {
+			bk[k] = v
+		}
+		stack = append(stack, restart{bk, n1, n2})
+		next1, next2 = n1, n2
+	}
+	pop := func() {
+		i1, i2 = next1, next2
+		m.values = stack[len(stack)-1].matches
+		stack = stack[:len(stack)-1]
+		next1, next2 = 0, 0
+		if len(stack) > 0 {
+			next1 = stack[len(stack)-1].next1
+			next2 = stack[len(stack)-1].next2
+		}
+	}
 	wildName := ""
 	wildStart := 0
 
@@ -717,18 +740,15 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 				}
 				// try to match zero or more at i2,
 				// restarting at i2+1 if it fails
-				next1 = i1
-				next2 = i2 + 1
-				backupMatches()
+				push(i1, i2+1)
 				i1++
 				continue
 			}
 			if partial && i1 == 0 {
 				// let "b; c" match "a; b; c"
 				// (simulates a $*_ at the beginning)
-				next2 = i2 + 1
 				partialStart = i2
-				backupMatches()
+				push(i1, i2+1)
 			}
 			if i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)) {
 				wildName = ""
@@ -744,9 +764,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 		}
 		// mismatch, try to restart
 		if 0 < next2 && next2 <= ns2len && (i1 != next1 || i2 != next2) {
-			i1 = next1
-			i2 = next2
-			m.values = oldMatches
+			pop()
 			continue
 		}
 		return nil

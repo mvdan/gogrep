@@ -323,6 +323,8 @@ func TestMatch(t *testing.T) {
 		{"if $*x {}", "if a(); b {}", 1},
 		{"if $*x {}; if $*x {}", "if a(); b {}; if a(); b {}", 1},
 		{"if $*x {}; if $*x {}", "if a(); b {}; if b {}", 0},
+		{"if $*_ {} else {}", "if a(); b {}", 0},
+		{"if $*_ {} else {}", "if a(); b {} else {}", 1},
 
 		// $*_ matching stmt+expr combos (fors)
 		{"for $*x {}", "for {}", 1},

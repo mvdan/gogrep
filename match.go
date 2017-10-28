@@ -411,7 +411,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			// for $*x { ... } on the left
 			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
 			return m.node(left, initExprList(y.Init, y.Cond, nil)) &&
-				m.node(x.Body, y.Body)
+				m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 		}
 		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
 			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)

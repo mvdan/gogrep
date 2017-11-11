@@ -469,7 +469,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
-	panic(fmt.Sprintf("unfinished node: %T", expr))
 }
 
 func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {

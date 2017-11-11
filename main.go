@@ -296,7 +296,7 @@ func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
 		err := printer.Fprint(w, fset, node)
 		if err != nil && strings.Contains(err.Error(), "go/printer: unsupported node type") {
 			// Should never happen, but make it obvious when it does.
-			panic(fmt.Errorf("cannot print node: %v\n", node, err))
+			panic(fmt.Errorf("cannot print node %T: %v\n", node, err))
 		}
 	}
 }

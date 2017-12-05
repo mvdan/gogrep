@@ -38,7 +38,7 @@ If `*` is before the name, it will match any number of nodes. Example:
        fmt.Fprintf(os.Stdout, $*_) // all Fprintfs on stdout
 
 Regexes can also be used to match certain identifier names only. The
-`.*` pattern can be used to math identifiers only. Example:
+`.*` pattern can be used to match all identifiers. Example:
 
        fmt.$(_ /Fprint.*/)(os.Stdout, $*_) // all Fprint* on stdout
 

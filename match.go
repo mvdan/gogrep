@@ -377,8 +377,16 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && x.Tok == y.Tok && m.node(x.X, y.X)
 	case *ast.AssignStmt:
 		y, ok := node.(*ast.AssignStmt)
-		return ok && x.Tok == y.Tok && m.exprs(x.Lhs, y.Lhs) &&
-			m.exprs(x.Rhs, y.Rhs)
+		if !m.aggressive {
+			return ok && x.Tok == y.Tok &&
+				m.exprs(x.Lhs, y.Lhs) && m.exprs(x.Rhs, y.Rhs)
+		}
+		if ok {
+			return m.exprs(x.Lhs, y.Lhs) && m.exprs(x.Rhs, y.Rhs)
+		}
+		vs, ok := node.(*ast.ValueSpec)
+		return ok && m.nodesMatch(exprList(x.Lhs), identList(vs.Names)) &&
+			m.exprs(x.Rhs, vs.Values)
 	case *ast.GoStmt:
 		y, ok := node.(*ast.GoStmt)
 		return ok && m.node(x.Call, y.Call)
@@ -774,12 +782,16 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 	return ns2.slice(partialStart, partialEnd)
 }
 
+func (m *matcher) nodesMatch(list1, list2 nodeList) bool {
+	return m.nodes(list1, list2, false) != nil
+}
+
 func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	return m.nodes(exprList(exprs1), exprList(exprs2), false) != nil
+	return m.nodesMatch(exprList(exprs1), exprList(exprs2))
 }
 
 func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	return m.nodes(identList(ids1), identList(ids2), false) != nil
+	return m.nodesMatch(identList(ids1), identList(ids2))
 }
 
 func initExprList(init ast.Stmt, expr ast.Expr, post ast.Stmt) stmtList {
@@ -836,15 +848,15 @@ func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 		}
 		left = append(left, id)
 	}
-	return m.nodes(identList(left), stmtList(stmts2), false) != nil
+	return m.nodesMatch(identList(left), stmtList(stmts2))
 }
 
 func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	return m.nodes(stmtList(stmts1), stmtList(stmts2), false) != nil
+	return m.nodesMatch(stmtList(stmts1), stmtList(stmts2))
 }
 
 func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	return m.nodes(specList(specs1), specList(specs2), false) != nil
+	return m.nodesMatch(specList(specs1), specList(specs2))
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {

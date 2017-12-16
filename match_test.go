@@ -424,6 +424,10 @@ func TestMatch(t *testing.T) {
 		{"~ var a int", "var (a, b int; c bool)", 1},
 		{"{ x; }", "switch { case true: x; }", 0},
 		{"~ { x; }", "switch { case true: x; }", 1},
+		{"a = b", "a = b; a := b", 1},
+		{"a := b", "a = b; a := b", 1},
+		{"~ a = b", "a = b; a := b; var a = b", 3},
+		{"~ a := b", "a = b; a := b; var a = b", 3},
 
 		// many cmds
 		{

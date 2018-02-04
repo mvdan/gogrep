@@ -97,9 +97,6 @@ func TestMatch(t *testing.T) {
 
 		// type assignability
 		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
-		// TODO: how come "untyped int" is not assignable to
-		// "int"?
-		// {"const _ = $(x asgn(int))", "package p; const _ = 3", 1},
 		{
 			"var $(x type(io.Reader)) $_",
 			`package p; import "os"; var f *os.File`, 0,

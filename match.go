@@ -109,6 +109,17 @@ func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
 	return nil
 }
 
+// optNode is like node, but for those nodes that can be nil and are not
+// part of a list. For example, init and post statements in a for loop.
+func (m *matcher) optNode(expr, node ast.Node) bool {
+	if ident := m.wildAnyIdent(expr); ident != nil {
+		if m.node(toStmtList(ident), toStmtList(node)) {
+			return true
+		}
+	}
+	return m.node(expr, node)
+}
+
 func (m *matcher) node(expr, node ast.Node) bool {
 	switch node.(type) {
 	case *ast.File, *ast.FuncType, *ast.BlockStmt, *ast.IfStmt,
@@ -415,9 +426,9 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			// if $*x { ... } on the left
 			left := toStmtList(condAny)
 			return m.node(left, toStmtList(y.Init, y.Cond)) &&
-				m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
+				m.node(x.Body, y.Body) && m.optNode(x.Else, y.Else)
 		}
-		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+		return m.optNode(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
 			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 	case *ast.CaseClause:
 		y, ok := node.(*ast.CaseClause)
@@ -434,10 +445,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return m.node(left, toStmtList(y.Init, y.Tag)) &&
 				m.node(x.Body, y.Body)
 		}
-		return m.node(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
+		return m.optNode(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
 	case *ast.TypeSwitchStmt:
 		y, ok := node.(*ast.TypeSwitchStmt)
-		return ok && m.node(x.Init, y.Init) && m.node(x.Assign, y.Assign) && m.node(x.Body, y.Body)
+		return ok && m.optNode(x.Init, y.Init) && m.node(x.Assign, y.Assign) && m.node(x.Body, y.Body)
 	case *ast.CommClause:
 		y, ok := node.(*ast.CommClause)
 		return ok && m.node(x.Comm, y.Comm) && m.stmts(x.Body, y.Body)
@@ -456,8 +467,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return m.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
 				m.node(x.Body, y.Body)
 		}
-		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
-			m.node(x.Post, y.Post) && m.node(x.Body, y.Body)
+		return m.optNode(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
+			m.optNode(x.Post, y.Post) && m.node(x.Body, y.Body)
 	case *ast.RangeStmt:
 		y, ok := node.(*ast.RangeStmt)
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
@@ -468,17 +479,19 @@ func (m *matcher) node(expr, node ast.Node) bool {
 }
 
 func (m *matcher) wildAnyIdent(node ast.Node) *ast.Ident {
-	ident, ok := node.(*ast.Ident)
-	if !ok {
-		return nil
+	switch x := node.(type) {
+	case *ast.ExprStmt:
+		return m.wildAnyIdent(x.X)
+	case *ast.Ident:
+		if !isWildName(x.Name) {
+			return nil
+		}
+		if !m.info(fromWildName(x.Name)).any {
+			return nil
+		}
+		return x
 	}
-	if !isWildName(ident.Name) {
-		return nil
-	}
-	if !m.info(fromWildName(ident.Name)).any {
-		return nil
-	}
-	return ident
+	return nil
 }
 
 func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {

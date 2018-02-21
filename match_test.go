@@ -167,7 +167,7 @@ func TestMatch(t *testing.T) {
 		{"print($*_, $x)", "print(a, b, c)", 1},
 
 		// any number of expressions
-		{"$*x", "a, b", 1},
+		{"$*x", "a, b", "a, b"},
 		{"print($*x)", "print()", 1},
 		{"print($*x)", "print(a, b)", 1},
 		{"print($*x, $y, $*z)", "print()", 0},
@@ -278,7 +278,7 @@ func TestMatch(t *testing.T) {
 		{"$x; $y", "1, 2", 0},
 
 		// any number of statements
-		{"$*x", "a; b", 1},
+		{"$*x", "a; b", "a; b"},
 		{"$*x; b; $*y", "a; b; c", 1},
 		{"$*x; b; $*x", "a; b; c", 0},
 
@@ -343,6 +343,30 @@ func TestMatch(t *testing.T) {
 		// $*_ matching stmt+expr combos (node type mixing)
 		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; {}", 1},
 		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; c() {}", 0},
+
+		// $*_ matching optional statements (ifs)
+		{"if $*_; b {}", "if b {}", 1},
+		{"if $*_; b {}", "if a := f(); b {}", 1},
+		// TODO: should these match?
+		//{"if a(); $*x { f($*x) }", "if a(); b { f(b) }", 1},
+		//{"if a(); $*x { f($*x) }", "if a(); b { f(b, c) }", 0},
+		//{"if $*_; $*_ {}", "if a(); b {}", 1},
+
+		// $*_ matching optional statements (fors)
+		{"for $*x; b; $*x {}", "for b {}", 1},
+		{"for $*x; b; $*x {}", "for a(); b; a() {}", 1},
+		{"for $*x; b; $*x {}", "for a(); b; c() {}", 0},
+
+		// $*_ matching optional statements (switches)
+		{"switch $*_; b {}", "switch b := f(); b {}", 1},
+		{"switch $*_; b {}", "switch b := f(); c {}", 0},
+
+		// $*_ matching optional statements (ifs)
+		{"if $*_; b {}", "if b {}", 1},
+		{"if $*_; b {}", "if a := f(); b {}", 1},
+		// TODO: fix
+		//{"if a(); $*x { f($*x) }", "if a(); b { f(b) }", 1},
+		//{"if a(); $*x { f($*x) }", "if a(); b { f(b, c) }", 0},
 
 		// inc/dec stmts
 		{"$x++", "a[b]++", 1},

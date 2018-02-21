@@ -37,6 +37,11 @@ If `*` is before the name, it will match any number of nodes. Example:
 
        fmt.Fprintf(os.Stdout, $*_) // all Fprintfs on stdout
 
+`*` can also be used to match optional nodes, like:
+
+	for $*_ { $*_ }    // will match all for loops
+	if $*_; $b { $*_ } // will match all ifs with condition $b
+
 Regexes can also be used to match certain identifier names only. The
 `.*` pattern can be used to match all identifiers. Example:
 

@@ -91,7 +91,7 @@ func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 			// so that "$*a" will match "a, b"
 			fn(exprList([]ast.Expr{e}), list)
 			// so that "$*a" will match "a; b"
-			fn(stmtList([]ast.Stmt{&ast.ExprStmt{X: e}}), list)
+			fn(toStmtList(e), list)
 		}
 	}
 	inspect(node, visit)
@@ -413,8 +413,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		condAny := m.wildAnyIdent(x.Cond)
 		if condAny != nil && x.Init == nil {
 			// if $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: condAny}})
-			return m.node(left, initExprList(y.Init, y.Cond, nil)) &&
+			left := toStmtList(condAny)
+			return m.node(left, toStmtList(y.Init, y.Cond)) &&
 				m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 		}
 		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
@@ -430,8 +430,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		tagAny := m.wildAnyIdent(x.Tag)
 		if tagAny != nil && x.Init == nil {
 			// switch $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: tagAny}})
-			return m.node(left, initExprList(y.Init, y.Tag, nil)) &&
+			left := toStmtList(tagAny)
+			return m.node(left, toStmtList(y.Init, y.Tag)) &&
 				m.node(x.Body, y.Body)
 		}
 		return m.node(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
@@ -452,8 +452,8 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		condIdent := m.wildAnyIdent(x.Cond)
 		if condIdent != nil && x.Init == nil && x.Post == nil {
 			// for $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: condIdent}})
-			return m.node(left, initExprList(y.Init, y.Cond, y.Post)) &&
+			left := toStmtList(condIdent)
+			return m.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
 				m.node(x.Body, y.Body)
 		}
 		return m.node(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
@@ -796,16 +796,18 @@ func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
 	return m.nodesMatch(identList(ids1), identList(ids2))
 }
 
-func initExprList(init ast.Stmt, expr ast.Expr, post ast.Stmt) stmtList {
+func toStmtList(nodes ...ast.Node) stmtList {
 	var stmts []ast.Stmt
-	if init != nil {
-		stmts = append(stmts, init)
-	}
-	if expr != nil {
-		stmts = append(stmts, &ast.ExprStmt{X: expr})
-	}
-	if post != nil {
-		stmts = append(stmts, post)
+	for _, node := range nodes {
+		switch x := node.(type) {
+		case nil:
+		case ast.Stmt:
+			stmts = append(stmts, x)
+		case ast.Expr:
+			stmts = append(stmts, &ast.ExprStmt{X: x})
+		default:
+			panic(fmt.Sprintf("unexpected node type: %T", x))
+		}
 	}
 	return stmtList(stmts)
 }

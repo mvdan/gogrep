@@ -322,6 +322,7 @@ func TestMatch(t *testing.T) {
 		{"if $*x {}; if $*x {}", "if a(); b {}; if b {}", 0},
 		{"if $*_ {} else {}", "if a(); b {}", 0},
 		{"if $*_ {} else {}", "if a(); b {} else {}", 1},
+		{"if a(); $*_ {}", "if b {}", 0},
 
 		// $*_ matching stmt+expr combos (fors)
 		{"for $*x {}", "for {}", 1},
@@ -329,12 +330,15 @@ func TestMatch(t *testing.T) {
 		{"for $*x {}", "for i(); a; p() {}", 1},
 		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); a; p() {}", 1},
 		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); b; p() {}", 0},
+		{"for a(); $*_; {}", "for b {}", 0},
+		{"for ; $*_; c() {}", "for b {}", 0},
 
 		// $*_ matching stmt+expr combos (switches)
 		{"switch $*x {}", "switch a {}", 1},
 		{"switch $*x {}", "switch a(); b {}", 1},
 		{"switch $*x {}; switch $*x {}", "switch a(); b {}; switch a(); b {}", 1},
 		{"switch $*x {}; switch $*x {}", "switch a(); b {}; switch b {}", 0},
+		{"switch a(); $*_ {}", "for b {}", 0},
 
 		// $*_ matching stmt+expr combos (node type mixing)
 		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; {}", 1},

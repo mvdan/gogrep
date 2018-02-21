@@ -410,14 +410,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if !ok {
 			return false
 		}
-		ident, ok := x.Cond.(*ast.Ident)
-		switch {
-		case x.Init != nil:
-		case !ok, !isWildName(ident.Name):
-		case !m.info(fromWildName(ident.Name)).any:
-		default:
-			// for $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+		condAny := m.wildAnyIdent(x.Cond)
+		if condAny != nil && x.Init == nil {
+			// if $*x { ... } on the left
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: condAny}})
 			return m.node(left, initExprList(y.Init, y.Cond, nil)) &&
 				m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
 		}
@@ -431,14 +427,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if !ok {
 			return false
 		}
-		ident, ok := x.Tag.(*ast.Ident)
-		switch {
-		case x.Init != nil:
-		case !ok, !isWildName(ident.Name):
-		case !m.info(fromWildName(ident.Name)).any:
-		default:
-			// for $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+		tagAny := m.wildAnyIdent(x.Tag)
+		if tagAny != nil && x.Init == nil {
+			// switch $*x { ... } on the left
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: tagAny}})
 			return m.node(left, initExprList(y.Init, y.Tag, nil)) &&
 				m.node(x.Body, y.Body)
 		}
@@ -457,14 +449,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if !ok {
 			return false
 		}
-		ident, ok := x.Cond.(*ast.Ident)
-		switch {
-		case x.Init != nil, x.Post != nil:
-		case !ok, !isWildName(ident.Name):
-		case !m.info(fromWildName(ident.Name)).any:
-		default:
+		condIdent := m.wildAnyIdent(x.Cond)
+		if condIdent != nil && x.Init == nil && x.Post == nil {
 			// for $*x { ... } on the left
-			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: ident}})
+			left := stmtList([]ast.Stmt{&ast.ExprStmt{X: condIdent}})
 			return m.node(left, initExprList(y.Init, y.Cond, y.Post)) &&
 				m.node(x.Body, y.Body)
 		}
@@ -477,6 +465,20 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}
+}
+
+func (m *matcher) wildAnyIdent(node ast.Node) *ast.Ident {
+	ident, ok := node.(*ast.Ident)
+	if !ok {
+		return nil
+	}
+	if !isWildName(ident.Name) {
+		return nil
+	}
+	if !m.info(fromWildName(ident.Name)).any {
+		return nil
+	}
+	return ident
 }
 
 func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {

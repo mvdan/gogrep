@@ -445,6 +445,7 @@ func TestMatch(t *testing.T) {
 		{"select {$*_}", "select {}", 1},
 		{"select {$a; $a}", "select {case <-x: a; case <-x: a}", 1},
 		{"select {$a; $a}", "select {case <-x: a; case <-x: b}", 0},
+		{"select {case x := <-y: f(x)}", "select {case x := <-y: f(x)}", 1},
 
 		// aggressive mode
 		{"for range $x {}", "for _ = range a {}", 0},

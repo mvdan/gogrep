@@ -888,7 +888,10 @@ func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 			if x.Comm == nil || len(x.Body) != 1 {
 				return false
 			}
-			expr, bstmt = x.Comm.(*ast.ExprStmt).X, x.Body[0]
+			if commExpr, ok := x.Comm.(*ast.ExprStmt); ok {
+				expr = commExpr.X
+			}
+			bstmt = x.Body[0]
 		default:
 			return false
 		}

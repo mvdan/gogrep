@@ -229,7 +229,7 @@ func fromWildName(s string) int {
 	}
 	n, err := strconv.Atoi(s[len(wildPrefix):])
 	if err != nil {
-		panic(err)
+		return -1
 	}
 	return n
 }

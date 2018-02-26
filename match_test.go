@@ -432,6 +432,7 @@ func TestMatch(t *testing.T) {
 		{"switch $_ {}", "switch x; y {}", 0},
 		{"switch $_; $_ {}", "switch x {}", 0},
 		{"switch $_; $_ {}", "switch x; y {}", 1},
+		{"switch { $*_; case $*_: $*a }", "switch { case x: y() }", 0},
 
 		// type switch statement
 		{"switch x := y.(z); x {}", "switch x := y.(z); x {}", 1},

@@ -475,6 +475,16 @@ func TestMatch(t *testing.T) {
 			"break; for {}; for { x() }; for { break }",
 			2,
 		},
+		{
+			[]string{"-x", "for { $*sts }", "-x", "$*sts"},
+			"for { a(); b() }",
+			"a(); b()",
+		},
+		{
+			[]string{"-x", "for { $*sts }", "-x", "$*sts"},
+			"for { if x { a(); b() } }",
+			"if x { a(); b(); }",
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

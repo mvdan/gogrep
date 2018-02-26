@@ -13,11 +13,38 @@ import (
 )
 
 func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
+	initial := make([]submatch, len(nodes))
+	for i, node := range nodes {
+		initial[i].node = node
+		initial[i].values = make(map[string]ast.Node)
+	}
+	final := m.submatches(cmds, initial)
+	finalNodes := make([]ast.Node, len(final))
+	for i := range finalNodes {
+		finalNodes[i] = final[i].node
+	}
+	return finalNodes
+}
+
+type submatch struct {
+	node   ast.Node
+	values map[string]ast.Node
+}
+
+func valsCopy(values map[string]ast.Node) map[string]ast.Node {
+	v2 := make(map[string]ast.Node, len(values))
+	for k, v := range values {
+		v2[k] = v
+	}
+	return v2
+}
+
+func (m *matcher) submatches(cmds []exprCmd, subs []submatch) []submatch {
 	if len(cmds) == 0 {
-		return nodes
+		return subs
 	}
 	cmd := cmds[0]
-	var fn func(exprCmd, []ast.Node) []ast.Node
+	var fn func(exprCmd, []submatch) []submatch
 	switch cmd.name {
 	case "x":
 		fn = m.cmdRange
@@ -26,52 +53,62 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 	case "v":
 		fn = m.cmdFilter(false)
 	}
-	return m.matches(cmds[1:], fn(cmd, nodes))
+	return m.submatches(cmds[1:], fn(cmd, subs))
 }
 
-func (m *matcher) cmdRange(cmd exprCmd, nodes []ast.Node) []ast.Node {
-	var matches []ast.Node
+func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
+	var matches []submatch
 	seen := map[[2]token.Pos]bool{}
+
+	// The values context for each new submatch must be a new copy
+	// from its parent submatch. If we don't do this copy, all the
+	// submatches would share the same map and have side effects.
+	var startValues map[string]ast.Node
+
 	match := func(exprNode, node ast.Node) {
 		if node == nil {
 			return
 		}
-		m.values = map[string]ast.Node{}
+		m.values = valsCopy(startValues)
 		found := m.topNode(exprNode, node)
 		if found == nil {
 			return
 		}
 		posRange := [2]token.Pos{found.Pos(), found.End()}
 		if !seen[posRange] {
-			matches = append(matches, found)
+			matches = append(matches, submatch{
+				node:   found,
+				values: m.values,
+			})
 			seen[posRange] = true
 		}
 	}
-	for _, node := range nodes {
-		walkWithLists(cmd.node, node, match)
+	for _, sub := range subs {
+		startValues = valsCopy(sub.values)
+		walkWithLists(cmd.node, sub.node, match)
 	}
 	return matches
 }
 
-func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []ast.Node) []ast.Node {
-	return func(cmd exprCmd, nodes []ast.Node) []ast.Node {
-		var matches []ast.Node
+func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []submatch) []submatch {
+	return func(cmd exprCmd, subs []submatch) []submatch {
+		var matches []submatch
 		any := false
 		match := func(exprNode, node ast.Node) {
 			if node == nil {
 				return
 			}
-			m.values = map[string]ast.Node{}
 			found := m.topNode(exprNode, node)
 			if found != nil {
 				any = true
 			}
 		}
-		for _, node := range nodes {
+		for _, sub := range subs {
 			any = false
-			walkWithLists(cmd.node, node, match)
+			m.values = sub.values
+			walkWithLists(cmd.node, sub.node, match)
 			if any == wantAny {
-				matches = append(matches, node)
+				matches = append(matches, sub)
 			}
 		}
 		return matches
@@ -83,16 +120,14 @@ func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 		fn(exprNode, node)
 		for _, list := range nodeLists(node) {
 			fn(exprNode, list)
+			if e, ok := exprNode.(ast.Expr); ok {
+				// so that "$*a" will match "a, b"
+				fn(exprList([]ast.Expr{e}), list)
+				// so that "$*a" will match "a; b"
+				fn(toStmtList(e), list)
+			}
 		}
 		return true
-	}
-	if list, ok := node.(nodeList); ok {
-		if e, ok := exprNode.(ast.Expr); ok {
-			// so that "$*a" will match "a, b"
-			fn(exprList([]ast.Expr{e}), list)
-			// so that "$*a" will match "a; b"
-			fn(toStmtList(e), list)
-		}
 	}
 	inspect(node, visit)
 }
@@ -101,6 +136,7 @@ func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
 	sts1, ok1 := exprNode.(stmtList)
 	sts2, ok2 := node.(stmtList)
 	if ok1 && ok2 {
+		// allow a partial match at the top level
 		return m.nodes(sts1, sts2, true)
 	}
 	if m.node(exprNode, node) {
@@ -710,11 +746,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 		if n2 > ns2len {
 			return // would be discarded anyway
 		}
-		bk := make(map[string]ast.Node, len(m.values))
-		for k, v := range m.values {
-			bk[k] = v
-		}
-		stack = append(stack, restart{bk, n1, n2})
+		stack = append(stack, restart{valsCopy(m.values), n1, n2})
 		next1, next2 = n1, n2
 	}
 	pop := func() {
@@ -909,6 +941,8 @@ func nodeLists(n ast.Node) []nodeList {
 		}
 	}
 	switch x := n.(type) {
+	case nodeList:
+		addList(x)
 	case *ast.CompositeLit:
 		addList(exprList(x.Elts))
 	case *ast.CallExpr:

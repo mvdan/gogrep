@@ -492,16 +492,25 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.SelectStmt)
 		return ok && m.node(x.Body, y.Body)
 	case *ast.ForStmt:
+		condIdent := m.wildAnyIdent(x.Cond)
+		if condIdent != nil && x.Init == nil && x.Post == nil {
+			// "for $*x { ... }" on the left
+			left := toStmtList(condIdent)
+			// also accept RangeStmt on the right
+			switch y := node.(type) {
+			case *ast.ForStmt:
+				return m.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
+					m.node(x.Body, y.Body)
+			case *ast.RangeStmt:
+				return m.node(left, toStmtList(y.Key, y.Value, y.X)) &&
+					m.node(x.Body, y.Body)
+			default:
+				return false
+			}
+		}
 		y, ok := node.(*ast.ForStmt)
 		if !ok {
 			return false
-		}
-		condIdent := m.wildAnyIdent(x.Cond)
-		if condIdent != nil && x.Init == nil && x.Post == nil {
-			// for $*x { ... } on the left
-			left := toStmtList(condIdent)
-			return m.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
-				m.node(x.Body, y.Body)
 		}
 		return m.optNode(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
 			m.optNode(x.Post, y.Post) && m.node(x.Body, y.Body)

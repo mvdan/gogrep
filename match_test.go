@@ -344,6 +344,11 @@ func TestMatch(t *testing.T) {
 		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; {}", 1},
 		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; c() {}", 0},
 
+		// for $*_ {} matching a range for
+		{"for $_ {}", "for range x {}", 0},
+		{"for $*_ {}", "for range x {}", 1},
+		{"for $*_ {}", "for _, v := range x {}", 1},
+
 		// $*_ matching optional statements (ifs)
 		{"if $*_; b {}", "if b {}", 1},
 		{"if $*_; b {}", "if a := f(); b {}", 1},

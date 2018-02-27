@@ -293,6 +293,14 @@ func TestMatch(t *testing.T) {
 			"func a(i int) int { return i }", 1,
 		},
 
+		// value specs
+		{"$_ int", "var a int", 1},
+		{"$_ int", "var a bool", 0},
+		// TODO: consider these
+		{"$_ int", "var a int = 3", 0},
+		{"$_ int", "var a, b int", 0},
+		{"$_ int", "func(i int) { println(i) }", 0},
+
 		// entire files
 		{"package $_", "package p; var a = 1", 0},
 		{"package $_; func Foo() { $*_ }", "package p; func Foo() {}", 1},

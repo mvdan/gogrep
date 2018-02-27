@@ -95,6 +95,9 @@ var tmplStmts = template.Must(template.New("").Parse(`` +
 var tmplType = template.Must(template.New("").Parse(`` +
 	`package p; var _ {{ . }}`))
 
+var tmplValSpec = template.Must(template.New("").Parse(`` +
+	`package p; var {{ . }}`))
+
 func execTmpl(tmpl *template.Template, src string) string {
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, src); err != nil {
@@ -176,6 +179,15 @@ func parseDetectingNode(src string) (ast.Node, error) {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
 		if typ := vs.Type; noBadNodes(typ) {
 			return typ, nil
+		}
+	}
+
+	// value specs
+	asValSpec := execTmpl(tmplValSpec, src)
+	if f, err := parser.ParseFile(fset, "", asValSpec, 0); err == nil {
+		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+		if noBadNodes(vs) {
+			return vs, nil
 		}
 	}
 	return nil, mainErr

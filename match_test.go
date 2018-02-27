@@ -518,7 +518,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 	if len(paths) > 0 {
 		t.Fatalf("non-zero paths: %v", paths)
 	}
-	srcNode, srcErr := parse(src)
+	srcNode, srcErr := parseDetectingNode(src)
 	if srcErr != nil {
 		t.Fatal(srcErr)
 	}

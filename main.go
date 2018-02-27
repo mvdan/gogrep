@@ -203,7 +203,7 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		return nil, nil, fmt.Errorf("need at least one command")
 	}
 	for i, cmd := range cmds {
-		node, err := m.compileExpr(cmd.src)
+		node, err := m.parseExpr(cmd.src)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -299,71 +299,4 @@ func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
 			panic(fmt.Errorf("cannot print node %T: %v\n", node, err))
 		}
 	}
-}
-
-type lineColBuffer struct {
-	bytes.Buffer
-	line, col, offs int
-}
-
-func (l *lineColBuffer) WriteString(s string) (n int, err error) {
-	for _, r := range s {
-		if r == '\n' {
-			l.line++
-			l.col = 1
-		} else {
-			l.col++
-		}
-		l.offs++
-	}
-	return l.Buffer.WriteString(s)
-}
-
-func (m *matcher) compileExpr(expr string) (node ast.Node, err error) {
-	toks, err := m.tokenize([]byte(expr))
-	if err != nil {
-		return nil, fmt.Errorf("cannot tokenize expr: %v", err)
-	}
-	var offs []posOffset
-	lbuf := lineColBuffer{line: 1, col: 1}
-	addOffset := func(length int) {
-		lbuf.offs -= length
-		offs = append(offs, posOffset{
-			atLine: lbuf.line,
-			atCol:  lbuf.col,
-			offset: length,
-		})
-	}
-	if len(toks) > 0 && toks[0].tok == tokAggressive {
-		toks = toks[1:]
-		m.aggressive = true
-	}
-	lastLit := false
-	for _, t := range toks {
-		if lbuf.offs >= t.pos.Offset && lastLit && t.lit != "" {
-			lbuf.WriteString(" ")
-		}
-		for lbuf.offs < t.pos.Offset {
-			lbuf.WriteString(" ")
-		}
-		if t.lit == "" {
-			lbuf.WriteString(t.tok.String())
-			lastLit = false
-			continue
-		}
-		if isWildName(t.lit) {
-			// to correct the position offsets for the extra
-			// info attached to ident name strings
-			addOffset(len(wildPrefix) - 1)
-		}
-		lbuf.WriteString(t.lit)
-		lastLit = strings.TrimSpace(t.lit) != ""
-	}
-	// trailing newlines can cause issues with commas
-	exprStr := strings.TrimSpace(lbuf.String())
-	if node, err = parse(exprStr); err != nil {
-		err = subPosOffsets(err, offs...)
-		return nil, fmt.Errorf("cannot parse expr: %v", err)
-	}
-	return node, nil
 }

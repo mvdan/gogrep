@@ -370,9 +370,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 
 	// decls
 	case *ast.GenDecl:
-		if m.aggressive && len(x.Specs) == 1 && m.node(x.Specs[0], node) {
-			return true
-		}
 		y, ok := node.(*ast.GenDecl)
 		return ok && x.Tok == y.Tok && m.specs(x.Specs, y.Specs)
 	case *ast.FuncDecl:

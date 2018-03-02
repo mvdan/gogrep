@@ -588,7 +588,7 @@ func (m *matcher) findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
 }
 
 var stdImportFixes = map[string]string{
-	// go list std | grep -v 'vendor|internal' | grep '/' | sed -r 's@^(.*)/([^/]*)$@"\2": "\1/\2",@' | sort
+	// go list std | grep -vE 'vendor|internal' | grep '/' | sed -r 's@^(.*)/([^/]*)$@"\2": "\1/\2",@' | sort
 	// (after commenting out the less likely duplicates)
 	"adler32":   "hash/adler32",
 	"aes":       "crypto/aes",

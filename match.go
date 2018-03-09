@@ -106,7 +106,7 @@ func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
 	}
 	for _, sub := range subs {
 		startValues = valsCopy(sub.values)
-		walkWithLists(cmd.node, sub.node, match)
+		m.walkWithLists(cmd.node, sub.node, match)
 	}
 	return matches
 }
@@ -127,7 +127,7 @@ func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []submatch) []submatch {
 		for _, sub := range subs {
 			any = false
 			m.values = sub.values
-			walkWithLists(cmd.node, sub.node, match)
+			m.walkWithLists(cmd.node, sub.node, match)
 			if any == wantAny {
 				matches = append(matches, sub)
 			}
@@ -136,16 +136,16 @@ func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []submatch) []submatch {
 	}
 }
 
-func walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
+func (m *matcher) walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 	visit := func(node ast.Node) bool {
 		fn(exprNode, node)
 		for _, list := range nodeLists(node) {
 			fn(exprNode, list)
-			if e, ok := exprNode.(ast.Expr); ok {
+			if id := m.wildAnyIdent(exprNode); id != nil {
 				// so that "$*a" will match "a, b"
-				fn(exprList([]ast.Expr{e}), list)
+				fn(exprList([]ast.Expr{id}), list)
 				// so that "$*a" will match "a; b"
-				fn(toStmtList(e), list)
+				fn(toStmtList(id), list)
 			}
 		}
 		return true

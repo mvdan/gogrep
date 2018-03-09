@@ -78,6 +78,8 @@ type matcher struct {
 	out io.Writer
 	ctx *build.Context
 
+	parents map[ast.Node]ast.Node
+
 	recursive         bool
 	typed, aggressive bool
 
@@ -125,13 +127,13 @@ type exprCmd struct {
 	node ast.Node
 }
 
-type orderedFlag struct {
+type strCmdFlag struct {
 	name string
 	cmds *[]exprCmd
 }
 
-func (o *orderedFlag) String() string { return "" }
-func (o *orderedFlag) Set(val string) error {
+func (o *strCmdFlag) String() string { return "" }
+func (o *strCmdFlag) Set(val string) error {
 	*o.cmds = append(*o.cmds, exprCmd{name: o.name, src: val})
 	return nil
 }
@@ -180,18 +182,22 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	flagSet.BoolVar(&m.recursive, "r", false, "match all dependencies recursively too")
 
 	var cmds []exprCmd
-	flagSet.Var(&orderedFlag{
+	flagSet.Var(&strCmdFlag{
 		name: "x",
 		cmds: &cmds,
 	}, "x", "range over the matches")
-	flagSet.Var(&orderedFlag{
+	flagSet.Var(&strCmdFlag{
 		name: "g",
 		cmds: &cmds,
 	}, "g", "discard if there are no matches")
-	flagSet.Var(&orderedFlag{
+	flagSet.Var(&strCmdFlag{
 		name: "v",
 		cmds: &cmds,
 	}, "v", "discard if there are any matches")
+	flagSet.Var(&strCmdFlag{
+		name: "s",
+		cmds: &cmds,
+	}, "s", "substitute with the given AST")
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 

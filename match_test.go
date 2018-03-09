@@ -17,6 +17,8 @@ type wantErr string
 func tokErr(msg string) wantErr   { return wantErr("cannot tokenize expr: " + msg) }
 func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) }
 
+type wantSrc string
+
 func TestMatch(t *testing.T) {
 	tests := []struct {
 		args    interface{}
@@ -502,6 +504,11 @@ func TestMatch(t *testing.T) {
 			"for { if x { a(); b() } }",
 			"if x { a(); b(); }",
 		},
+		{
+			[]string{"-x", "foo", "-s", "bar"},
+			`foo(); println("foo"); println(foo, foobar)`,
+			wantSrc(`bar(); println("foo"); println(bar, foobar)`),
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
@@ -574,6 +581,15 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		}
 		got := singleLinePrint(matches[0])
 		if got != want {
+			terr("wanted %q match, got %q", want, got)
+		}
+	case wantSrc:
+		if err != nil {
+			terr("unexpected error: %v", err)
+			return
+		}
+		got := singleLinePrint(srcNode)
+		if got != string(want) {
 			terr("wanted %q match, got %q", want, got)
 		}
 	default:

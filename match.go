@@ -13,6 +13,7 @@ import (
 )
 
 func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
+	m.fillParents(nodes)
 	initial := make([]submatch, len(nodes))
 	for i, node := range nodes {
 		initial[i].node = node
@@ -24,6 +25,24 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 		finalNodes[i] = final[i].node
 	}
 	return finalNodes
+}
+
+func (m *matcher) fillParents(nodes []ast.Node) {
+	m.parents = make(map[ast.Node]ast.Node)
+	stack := make([]ast.Node, 1, 32)
+	for _, node := range nodes {
+		inspect(node, func(node ast.Node) bool {
+			if node == nil {
+				stack = stack[:len(stack)-1]
+				return true
+			}
+			if _, ok := node.(nodeList); !ok {
+				m.parents[node] = stack[len(stack)-1]
+			}
+			stack = append(stack, node)
+			return true
+		})
+	}
 }
 
 type submatch struct {
@@ -52,6 +71,8 @@ func (m *matcher) submatches(cmds []exprCmd, subs []submatch) []submatch {
 		fn = m.cmdFilter(true)
 	case "v":
 		fn = m.cmdFilter(false)
+	default: // "s"
+		fn = m.cmdSubst
 	}
 	return m.submatches(cmds[1:], fn(cmd, subs))
 }

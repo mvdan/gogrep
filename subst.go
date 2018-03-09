@@ -11,10 +11,25 @@ import (
 
 func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
 	for _, sub := range subs {
-		m.substNode(sub.node, cmd.node)
-		sub.node = cmd.node
+		nodeCopy, _ := m.parseExpr(cmd.src)
+		m.fillParents(nodeCopy)
+		m.fillValues(nodeCopy, sub.values)
+		m.substNode(sub.node, nodeCopy)
+		sub.node = nodeCopy
 	}
 	return subs
+}
+
+func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
+	ast.Inspect(node, func(node ast.Node) bool {
+		id := fromWildNode(node)
+		info := m.info(id)
+		if info.name == "" {
+			return true
+		}
+		m.substNode(node, values[info.name])
+		return true
+	})
 }
 
 func (m *matcher) substNode(oldNode, newNode ast.Node) {
@@ -28,7 +43,13 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 }
 
 func (m *matcher) nodePtr(node ast.Node) interface{} {
+	if _, ok := node.(nodeList); ok {
+		return nil
+	}
 	parent := m.parents[node]
+	if parent == nil {
+		return nil
+	}
 	v := reflect.ValueOf(parent).Elem()
 	for i := 0; i < v.NumField(); i++ {
 		fld := v.Field(i)

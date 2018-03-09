@@ -509,6 +509,11 @@ func TestMatch(t *testing.T) {
 			`foo(); println("foo"); println(foo, foobar)`,
 			wantSrc(`bar(); println("foo"); println(bar, foobar)`),
 		},
+		{
+			[]string{"-x", "$f()", "-s", "$f(nil)"},
+			`foo(); bar(); baz(x)`,
+			wantSrc(`foo(nil); bar(nil); baz(x)`),
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

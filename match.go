@@ -13,7 +13,8 @@ import (
 )
 
 func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
-	m.fillParents(nodes)
+	m.parents = make(map[ast.Node]ast.Node)
+	m.fillParents(nodes...)
 	initial := make([]submatch, len(nodes))
 	for i, node := range nodes {
 		initial[i].node = node
@@ -27,8 +28,7 @@ func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
 	return finalNodes
 }
 
-func (m *matcher) fillParents(nodes []ast.Node) {
-	m.parents = make(map[ast.Node]ast.Node)
+func (m *matcher) fillParents(nodes ...ast.Node) {
 	stack := make([]ast.Node, 1, 32)
 	for _, node := range nodes {
 		inspect(node, func(node ast.Node) bool {

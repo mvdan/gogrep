@@ -34,7 +34,7 @@ func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
 	var pkgs []loadPkg
 	var cur loadPkg
 	addFile := func(path string) error {
-		f, err := parser.ParseFile(l.fset, path, nil, 0)
+		f, err := parser.ParseFile(l.fset, path, nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}

@@ -20,6 +20,10 @@ func TestWriteFiles(t *testing.T) {
 			"package p\n\nfunc f() { foo() }\n",
 			"package p\n\nfunc f() { bar() }\n",
 		},
+		{
+			"// package p doc\npackage p\n\nfunc f() { foo() }\n",
+			"// package p doc\npackage p\n\nfunc f() { bar() }\n",
+		},
 	}
 	dir, err := ioutil.TempDir("", "gogrep-write")
 	if err != nil {

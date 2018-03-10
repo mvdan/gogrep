@@ -164,6 +164,8 @@ func TestMatch(t *testing.T) {
 		{"$x, $y", "foo(1, 2)", 1},
 		{"$x, $y", "1", 0},
 		{"$x", "a, b", 3},
+		// unlike statements, expressions don't automatically
+		// imply partial matches
 		{"b, c", "a, b, c, d", 0},
 		{"b, c", "foo(a, b, c, d)", 0},
 		{"print($*_, $x)", "print(a, b, c)", 1},
@@ -513,6 +515,21 @@ func TestMatch(t *testing.T) {
 			[]string{"-x", "$f()", "-s", "$f(nil)"},
 			`foo(); bar(); baz(x)`,
 			wantSrc(`foo(nil); bar(nil); baz(x)`),
+		},
+		{
+			[]string{"-x", "foo($*_)", "-s", "foo()"},
+			`foo(); foo(a, b); bar(x)`,
+			wantSrc(`foo(); foo(); bar(x)`),
+		},
+		{
+			[]string{"-x", "a, b", "-s", "c, d"},
+			`foo(); foo(a, b); bar(a, b)`,
+			wantSrc(`foo(); foo(c, d); bar(c, d)`),
+		},
+		{
+			[]string{"-x", "a(); b()", "-s", "c(); d()"},
+			`{ a(); b(); c(); }; { a(); a(); b(); }`,
+			wantSrc(`{ c(); d(); c(); }; { a(); c(); d(); }`),
 		},
 	}
 	for i, tc := range tests {

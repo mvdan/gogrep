@@ -21,7 +21,7 @@ func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
 }
 
 func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
-	ast.Inspect(node, func(node ast.Node) bool {
+	inspect(node, func(node ast.Node) bool {
 		id := fromWildNode(node)
 		info := m.info(id)
 		if info.name == "" {
@@ -37,14 +37,40 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	switch x := ptr.(type) {
 	case *ast.Expr:
 		*x = newNode.(ast.Expr)
+	case *[]ast.Expr:
+		oldList := oldNode.(exprList)
+		var first, last []ast.Expr
+		for i, expr := range *x {
+			if expr == oldList[0] {
+				first = (*x)[:i]
+				last = (*x)[i+len(oldList):]
+				break
+			}
+		}
+		*x = append(first, newNode.(exprList)...)
+		*x = append(*x, last...)
+	case *[]ast.Stmt:
+		oldList := oldNode.(stmtList)
+		var first, last []ast.Stmt
+		for i, stmt := range *x {
+			if stmt == oldList[0] {
+				first = (*x)[:i]
+				last = (*x)[i+len(oldList):]
+				break
+			}
+		}
+		*x = append(first, newNode.(stmtList)...)
+		*x = append(*x, last...)
 	default:
 		panic(fmt.Sprintf("unsupported substitution: %T", oldNode))
 	}
 }
 
 func (m *matcher) nodePtr(node ast.Node) interface{} {
-	if _, ok := node.(nodeList); ok {
-		return nil
+	wantSlice := false
+	if list, ok := node.(nodeList); ok {
+		node = list.at(0)
+		wantSlice = true
 	}
 	parent := m.parents[node]
 	if parent == nil {
@@ -57,9 +83,13 @@ func (m *matcher) nodePtr(node ast.Node) interface{} {
 		case reflect.Slice:
 			for i := 0; i < fld.Len(); i++ {
 				ifld := fld.Index(i)
-				if ifld.Interface() == node {
-					return ifld.Addr().Interface()
+				if ifld.Interface() != node {
+					continue
 				}
+				if wantSlice {
+					return fld.Addr().Interface()
+				}
+				return ifld.Addr().Interface()
 			}
 		case reflect.Interface:
 			if fld.Interface() == node {

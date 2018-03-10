@@ -71,15 +71,20 @@ func (m *matcher) submatches(cmds []exprCmd, subs []submatch) []submatch {
 		fn = m.cmdFilter(true)
 	case "v":
 		fn = m.cmdFilter(false)
-	default: // "s"
+	case "s":
 		fn = m.cmdSubst
+	default: // "w"
+		if len(cmds) > 1 {
+			panic("-w must be the last command")
+		}
+		fn = m.cmdWrite
 	}
 	return m.submatches(cmds[1:], fn(cmd, subs))
 }
 
 func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
 	var matches []submatch
-	seen := map[[2]token.Pos]bool{}
+	seen := map[nodePosHash]bool{}
 
 	// The values context for each new submatch must be a new copy
 	// from its parent submatch. If we don't do this copy, all the
@@ -95,13 +100,13 @@ func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
 		if found == nil {
 			return
 		}
-		posRange := [2]token.Pos{found.Pos(), found.End()}
-		if !seen[posRange] {
+		hash := posHash(found)
+		if !seen[hash] {
 			matches = append(matches, submatch{
 				node:   found,
 				values: m.values,
 			})
-			seen[posRange] = true
+			seen[hash] = true
 		}
 	}
 	for _, sub := range subs {

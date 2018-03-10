@@ -78,6 +78,8 @@ type matcher struct {
 	out io.Writer
 	ctx *build.Context
 
+	loader nodeLoader
+
 	parents map[ast.Node]ast.Node
 
 	recursive         bool
@@ -138,6 +140,21 @@ func (o *strCmdFlag) Set(val string) error {
 	return nil
 }
 
+type boolCmdFlag struct {
+	name string
+	cmds *[]exprCmd
+}
+
+func (o *boolCmdFlag) String() string { return "" }
+func (o *boolCmdFlag) Set(val string) error {
+	if val != "true" {
+		return fmt.Errorf("flag can only be true")
+	}
+	*o.cmds = append(*o.cmds, exprCmd{name: o.name})
+	return nil
+}
+func (o *boolCmdFlag) IsBoolFlag() bool { return true }
+
 func (m *matcher) fromArgs(args []string) error {
 	cmds, paths, err := m.parseCmds(args)
 	if err != nil {
@@ -148,12 +165,12 @@ func (m *matcher) fromArgs(args []string) error {
 	if err != nil {
 		return err
 	}
-	loader := nodeLoader{wd, m.ctx, fset}
+	m.loader = nodeLoader{wd, m.ctx, fset}
 	var pkgs []loadPkg
 	if !m.typed {
-		pkgs, err = loader.untyped(paths, m.recursive)
+		pkgs, err = m.loader.untyped(paths, m.recursive)
 	} else {
-		pkgs, err = loader.typed(paths, m.recursive)
+		pkgs, err = m.loader.typed(paths, m.recursive)
 	}
 	if err != nil {
 		return err
@@ -167,7 +184,7 @@ func (m *matcher) fromArgs(args []string) error {
 		all = append(all, m.matches(cmds, pkg.nodes)...)
 	}
 	for _, n := range all {
-		fpos := loader.fset.Position(n.Pos())
+		fpos := m.loader.fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
 		}
@@ -198,6 +215,10 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		name: "s",
 		cmds: &cmds,
 	}, "s", "substitute with the given AST")
+	flagSet.Var(&boolCmdFlag{
+		name: "w",
+		cmds: &cmds,
+	}, "w", "write source back with changes applied")
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 
@@ -209,6 +230,10 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		return nil, nil, fmt.Errorf("need at least one command")
 	}
 	for i, cmd := range cmds {
+		switch cmd.name {
+		case "w":
+			continue // no expr
+		}
 		node, err := m.parseExpr(cmd.src)
 		if err != nil {
 			return nil, nil, err

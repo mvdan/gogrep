@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"go/ast"
+	"go/token"
 	"reflect"
 )
 
@@ -98,4 +99,17 @@ func (m *matcher) nodePtr(node ast.Node) interface{} {
 		}
 	}
 	return nil
+}
+
+// nodePosHash is an ast.Node that can always be used as a key in maps,
+// even for nodes that are slices like nodeList.
+type nodePosHash struct {
+	pos, end token.Pos
+}
+
+func (n nodePosHash) Pos() token.Pos { return n.pos }
+func (n nodePosHash) End() token.Pos { return n.end }
+
+func posHash(node ast.Node) nodePosHash {
+	return nodePosHash{pos: node.Pos(), end: node.End()}
 }

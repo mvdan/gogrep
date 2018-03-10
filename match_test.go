@@ -531,6 +531,11 @@ func TestMatch(t *testing.T) {
 			`{ a(); b(); c(); }; { a(); a(); b(); }`,
 			wantSrc(`{ c(); d(); c(); }; { a(); c(); d(); }`),
 		},
+		{
+			[]string{"-x", "a()", "-s", "c()", "-w"},
+			`{ a(); b(); a(); }`,
+			`{ c(); b(); c(); }`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
@@ -606,6 +611,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 			terr("wanted %q match, got %q", want, got)
 		}
 	case wantSrc:
+		// TODO: replace with a more robust -w
 		if err != nil {
 			terr("unexpected error: %v", err)
 			return

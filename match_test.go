@@ -536,6 +536,11 @@ func TestMatch(t *testing.T) {
 			`{ a(); b(); a(); }`,
 			`{ c(); b(); c(); }`,
 		},
+		{
+			[]string{"-x", "go func() { $f() }()", "-s", "go $f()", "-w"},
+			`{ go func() { f.Close() }(); }`,
+			`{ go f.Close(); }`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

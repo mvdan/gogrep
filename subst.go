@@ -38,6 +38,8 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	switch x := ptr.(type) {
 	case *ast.Expr:
 		*x = newNode.(ast.Expr)
+	case *ast.Stmt:
+		*x = newNode.(ast.Stmt)
 	case *[]ast.Expr:
 		oldList := oldNode.(exprList)
 		var first, last []ast.Expr

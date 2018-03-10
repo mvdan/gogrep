@@ -32,6 +32,8 @@ A command is of the form "-A pattern", where -A is one of:
   -x   find all nodes matching a pattern
   -g   discard nodes not matching a pattern
   -v   discard nodes matching a pattern
+  -s   substitute with a given syntax tree
+  -w   write source back to disk or stdout
 
 If -A is ommitted for a single command, -x will be assumed.
 
@@ -202,23 +204,23 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	flagSet.Var(&strCmdFlag{
 		name: "x",
 		cmds: &cmds,
-	}, "x", "range over the matches")
+	}, "x", "")
 	flagSet.Var(&strCmdFlag{
 		name: "g",
 		cmds: &cmds,
-	}, "g", "discard if there are no matches")
+	}, "g", "")
 	flagSet.Var(&strCmdFlag{
 		name: "v",
 		cmds: &cmds,
-	}, "v", "discard if there are any matches")
+	}, "v", "")
 	flagSet.Var(&strCmdFlag{
 		name: "s",
 		cmds: &cmds,
-	}, "s", "substitute with the given AST")
+	}, "s", "")
 	flagSet.Var(&boolCmdFlag{
 		name: "w",
 		cmds: &cmds,
-	}, "w", "write source back with changes applied")
+	}, "w", "")
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 

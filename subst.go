@@ -49,7 +49,16 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	case *ast.Expr:
 		*x = newNode.(ast.Expr)
 	case *ast.Stmt:
-		*x = newNode.(ast.Stmt)
+		switch y := newNode.(type) {
+		case ast.Expr:
+			stmt := &ast.ExprStmt{X: y}
+			m.setParentOf(stmt, parent)
+			*x = stmt
+		case ast.Stmt:
+			*x = y
+		default:
+			panic(fmt.Sprintf("cannot replace stmt with %T", y))
+		}
 	case *[]ast.Expr:
 		oldList := oldNode.(exprList)
 		var first, last []ast.Expr

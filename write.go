@@ -52,11 +52,7 @@ var printConfig = printer.Config{
 }
 
 func (m *matcher) nodeRoot(node ast.Node) ast.Node {
-	list, ok := node.(nodeList)
-	if ok {
-		node = list.at(0)
-	}
-	parent := m.parents[node]
+	parent := m.parentOf(node)
 	if parent == nil {
 		return node
 	}

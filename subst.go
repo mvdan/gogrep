@@ -39,6 +39,9 @@ func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
 }
 
 func (m *matcher) substNode(oldNode, newNode ast.Node) {
+	parent := m.parentOf(oldNode)
+	m.setParentOf(newNode, parent)
+
 	ptr := m.nodePtr(oldNode)
 	switch x := ptr.(type) {
 	case **ast.Ident:
@@ -69,20 +72,46 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 				break
 			}
 		}
-		*x = append(first, newNode.(stmtList)...)
+		switch y := newNode.(type) {
+		case ast.Expr:
+			stmt := &ast.ExprStmt{X: y}
+			m.setParentOf(stmt, parent)
+			*x = append(first, stmt)
+		case ast.Stmt:
+			*x = append(first, y)
+		case stmtList:
+			*x = append(first, y...)
+		default:
+			panic(fmt.Sprintf("cannot replace stmts with %T", y))
+		}
 		*x = append(*x, last...)
 	default:
-		panic(fmt.Sprintf("unsupported substitution: %T", oldNode))
+		panic(fmt.Sprintf("unsupported substitution: %T", x))
 	}
 }
 
-func (m *matcher) nodePtr(node ast.Node) interface{} {
-	wantSlice := false
-	if list, ok := node.(nodeList); ok {
+func (m *matcher) parentOf(node ast.Node) ast.Node {
+	list, ok := node.(nodeList)
+	if ok {
 		node = list.at(0)
-		wantSlice = true
 	}
-	parent := m.parents[node]
+	return m.parents[node]
+}
+
+func (m *matcher) setParentOf(node, parent ast.Node) {
+	list, ok := node.(nodeList)
+	if ok {
+		node = list.at(0)
+	}
+	m.parents[node] = parent
+}
+
+func (m *matcher) nodePtr(node ast.Node) interface{} {
+	list, wantSlice := node.(nodeList)
+	if wantSlice {
+		node = list.at(0)
+	}
+	parent := m.parentOf(node)
 	if parent == nil {
 		return nil
 	}

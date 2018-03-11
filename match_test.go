@@ -548,6 +548,11 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "foo($*a)", "-s", "bar($*a)", "-w"},
+			`{ foo(); }`,
+			`{ bar(); }`,
+		},
+		{
+			[]string{"-x", "foo($*a)", "-s", "bar($*a)", "-w"},
 			`{ foo(0); }`,
 			`{ bar(0); }`,
 		},

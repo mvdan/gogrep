@@ -117,6 +117,9 @@ func (m *matcher) parentOf(node ast.Node) ast.Node {
 func (m *matcher) setParentOf(node, parent ast.Node) {
 	list, ok := node.(nodeList)
 	if ok {
+		if list.len() == 0 {
+			return
+		}
 		node = list.at(0)
 	}
 	m.parents[node] = parent

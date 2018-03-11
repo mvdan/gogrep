@@ -60,7 +60,14 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 				break
 			}
 		}
-		*x = append(first, newNode.(exprList)...)
+		switch y := newNode.(type) {
+		case ast.Expr:
+			*x = append(first, y)
+		case exprList:
+			*x = append(first, y...)
+		default:
+			panic(fmt.Sprintf("cannot replace exprs with %T", y))
+		}
 		*x = append(*x, last...)
 	case *[]ast.Stmt:
 		oldList := oldNode.(stmtList)

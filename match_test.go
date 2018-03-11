@@ -546,6 +546,11 @@ func TestMatch(t *testing.T) {
 			`package p; var foo int`,
 			`package p; var bar int`,
 		},
+		{
+			[]string{"-x", "foo($*a)", "-s", "bar($*a)", "-w"},
+			`{ foo(0); }`,
+			`{ bar(0); }`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

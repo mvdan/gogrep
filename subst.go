@@ -28,7 +28,12 @@ func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
 		if info.name == "" {
 			return true
 		}
-		m.substNode(node, values[info.name])
+		prev := values[info.name]
+		switch prev.(type) {
+		case exprList:
+			node = exprList([]ast.Expr{node.(*ast.Ident)})
+		}
+		m.substNode(node, prev)
 		return true
 	})
 }

@@ -13,6 +13,10 @@ import (
 func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
 	for _, sub := range subs {
 		nodeCopy, _ := m.parseExpr(cmd.src)
+		// since we'll want to set positions within the file's
+		// FileSet
+		scrubPositions(nodeCopy)
+
 		m.fillParents(nodeCopy)
 		m.fillValues(nodeCopy, sub.values)
 		m.substNode(sub.node, nodeCopy)
@@ -104,6 +108,9 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	default:
 		panic(fmt.Sprintf("unsupported substitution: %T", x))
 	}
+	// the new nodes have scrubbed positions, so try our best to use
+	// sensible ones
+	fixPositions(parent)
 }
 
 func (m *matcher) parentOf(node ast.Node) ast.Node {
@@ -169,4 +176,42 @@ func (n nodePosHash) End() token.Pos { return n.end }
 
 func posHash(node ast.Node) nodePosHash {
 	return nodePosHash{pos: node.Pos(), end: node.End()}
+}
+
+var posType = reflect.TypeOf(token.NoPos)
+
+func scrubPositions(node ast.Node) {
+	inspect(node, func(node ast.Node) bool {
+		v := reflect.ValueOf(node)
+		if v.Kind() != reflect.Ptr {
+			return true
+		}
+		v = v.Elem()
+		if v.Kind() != reflect.Struct {
+			return true
+		}
+		for i := 0; i < v.NumField(); i++ {
+			fld := v.Field(i)
+			if fld.Type() == posType {
+				fld.SetInt(0)
+			}
+		}
+		return true
+	})
+}
+
+func fixPositions(node ast.Node) {
+	fallback := func(pos *token.Pos, to token.Pos) {
+		if !pos.IsValid() {
+			*pos = to
+		}
+	}
+	ast.Inspect(node, func(node ast.Node) bool {
+		// TODO: many more node types
+		switch x := node.(type) {
+		case *ast.GoStmt:
+			fallback(&x.Go, x.Call.Pos())
+		}
+		return true
+	})
 }

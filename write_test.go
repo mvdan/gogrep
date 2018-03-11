@@ -14,7 +14,10 @@ import (
 )
 
 func TestWriteFiles(t *testing.T) {
-	args := []string{"-x", "foo", "-s", "bar", "-w"}
+	argsList := [][]string{
+		{"-x", "foo", "-s", "bar"},
+		{"-x", "go func() { $f($*a) }()", "-s", "go $f($*a)"},
+	}
 	files := []struct{ orig, want string }{
 		{
 			"package p\n\nfunc f() { foo() }\n",
@@ -23,6 +26,26 @@ func TestWriteFiles(t *testing.T) {
 		{
 			"// package p doc\npackage p\n\nfunc f() { foo() }\n",
 			"// package p doc\npackage p\n\nfunc f() { bar() }\n",
+		},
+		{
+			`package p
+
+func f() {
+	go func() {
+		// comment
+		fn(0)
+	}()
+}
+`,
+			`package p
+
+func f() {
+
+	// comment
+	go fn(0)
+
+}
+`,
 		},
 	}
 	dir, err := ioutil.TempDir("", "gogrep-write")
@@ -38,17 +61,20 @@ func TestWriteFiles(t *testing.T) {
 		}
 		paths = append(paths, path)
 	}
-	args = append(args, paths...)
+	for _, args := range argsList {
+		args = append(args, "-w")
+		args = append(args, paths...)
 
-	m := matcher{ctx: &build.Default}
-	var buf bytes.Buffer
-	m.out = &buf
-	if err := m.fromArgs(args); err != nil {
-		t.Fatalf("didn't want error, but got %q", err)
-	}
-	gotOut := buf.String()
-	if gotOut != "" {
-		t.Fatalf("got non-empty output:\n%s", gotOut)
+		m := matcher{ctx: &build.Default}
+		var buf bytes.Buffer
+		m.out = &buf
+		if err := m.fromArgs(args); err != nil {
+			t.Fatalf("didn't want error, but got %q", err)
+		}
+		gotOut := buf.String()
+		if gotOut != "" {
+			t.Fatalf("got non-empty output:\n%s", gotOut)
+		}
 	}
 
 	for i, path := range paths {

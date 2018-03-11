@@ -541,6 +541,11 @@ func TestMatch(t *testing.T) {
 			`{ go func() { f.Close() }(); }`,
 			`{ go f.Close(); }`,
 		},
+		{
+			[]string{"-x", "foo", "-s", "bar", "-w"},
+			`package p; var foo int`,
+			`package p; var bar int`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
@@ -586,6 +591,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 			t.Fatal(err)
 		}
 	}
+	m.loader.fset = emptyFset
 	matches := m.matches(cmds, []ast.Node{srcNode})
 	switch want := anyWant.(type) {
 	case wantErr:

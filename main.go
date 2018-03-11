@@ -254,16 +254,24 @@ var rxNeedSemicolon = regexp.MustCompile(`([])}a-zA-Z0-9"'` + "`" + `]|\+\+|--)$
 
 func (b *bufferJoinLines) Write(p []byte) (n int, err error) {
 	if string(p) == "\n" {
+		if b.last == "\n" {
+			return 1, nil
+		}
 		if rxNeedSemicolon.MatchString(b.last) {
 			b.Buffer.WriteByte(';')
 		}
 		b.Buffer.WriteByte(' ')
+		b.last = "\n"
 		return 1, nil
 	}
 	p = bytes.Trim(p, "\t")
 	n, err = b.Buffer.Write(p)
 	b.last = string(p)
 	return
+}
+
+func (b *bufferJoinLines) String() string {
+	return strings.TrimSuffix(b.Buffer.String(), "; ")
 }
 
 // inspect is like ast.Inspect, but it supports our extra nodeList Node
@@ -285,6 +293,8 @@ func inspect(node ast.Node, fn func(ast.Node) bool) {
 	fn(nil)
 }
 
+var emptyFset = token.NewFileSet()
+
 func singleLinePrint(node ast.Node) string {
 	var buf bufferJoinLines
 	inspect(node, func(node ast.Node) bool {
@@ -301,7 +311,7 @@ func singleLinePrint(node ast.Node) string {
 		bl.Value = strconv.Quote(bl.Value[1 : len(bl.Value)-1])
 		return true
 	})
-	printNode(&buf, token.NewFileSet(), node)
+	printNode(&buf, emptyFset, node)
 	return buf.String()
 }
 

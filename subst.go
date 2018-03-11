@@ -36,6 +36,8 @@ func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
 func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	ptr := m.nodePtr(oldNode)
 	switch x := ptr.(type) {
+	case **ast.Ident:
+		*x = newNode.(*ast.Ident)
 	case *ast.Expr:
 		*x = newNode.(ast.Expr)
 	case *ast.Stmt:

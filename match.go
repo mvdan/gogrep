@@ -9,6 +9,7 @@ import (
 	"go/importer"
 	"go/token"
 	"go/types"
+	"regexp"
 	"strconv"
 )
 
@@ -73,11 +74,17 @@ func (m *matcher) submatches(cmds []exprCmd, subs []submatch) []submatch {
 		fn = m.cmdFilter(false)
 	case "s":
 		fn = m.cmdSubst
-	default: // "w"
+	case "a":
+		fn = m.cmdAttr
+	case "p":
+		fn = m.cmdParents
+	case "w":
 		if len(cmds) > 1 {
 			panic("-w must be the last command")
 		}
 		fn = m.cmdWrite
+	default:
+		panic(fmt.Sprintf("unknown command: %q", cmd.name))
 	}
 	return m.submatches(cmds[1:], fn(cmd, subs))
 }
@@ -111,7 +118,7 @@ func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
 	}
 	for _, sub := range subs {
 		startValues = valsCopy(sub.values)
-		m.walkWithLists(cmd.node, sub.node, match)
+		m.walkWithLists(cmd.value.(ast.Node), sub.node, match)
 	}
 	return matches
 }
@@ -132,13 +139,102 @@ func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []submatch) []submatch {
 		for _, sub := range subs {
 			any = false
 			m.values = sub.values
-			m.walkWithLists(cmd.node, sub.node, match)
+			m.walkWithLists(cmd.value.(ast.Node), sub.node, match)
 			if any == wantAny {
 				matches = append(matches, sub)
 			}
 		}
 		return matches
 	}
+}
+
+func (m *matcher) cmdAttr(cmd exprCmd, subs []submatch) []submatch {
+	var matches []submatch
+	for _, sub := range subs {
+		m.values = sub.values
+		if m.attrApplies(sub.node, cmd.value.(attribute)) {
+			matches = append(matches, sub)
+		}
+	}
+	return matches
+}
+
+func (m *matcher) cmdParents(cmd exprCmd, subs []submatch) []submatch {
+	for i := range subs {
+		sub := &subs[i]
+		reps := cmd.value.(int)
+		for j := 0; j < reps; j++ {
+			sub.node = m.parentOf(sub.node)
+		}
+	}
+	return subs
+}
+
+func (m *matcher) attrApplies(node ast.Node, attr interface{}) bool {
+	if rx, ok := attr.(*regexp.Regexp); ok {
+		if exprStmt, ok := node.(*ast.ExprStmt); ok {
+			// since we prefer matching entire statements, get the
+			// ident from the ExprStmt
+			node = exprStmt.X
+		}
+		ident, ok := node.(*ast.Ident)
+		return ok && rx.MatchString(ident.Name)
+	}
+	expr, _ := node.(ast.Expr)
+	if expr == nil {
+		return false // only exprs have types
+	}
+	t := m.Info.TypeOf(expr)
+	if t == nil {
+		return false // an expr, but no type?
+	}
+	tv := m.Info.Types[expr]
+	switch x := attr.(type) {
+	case typeCheck:
+		want := m.resolveType(m.scope, x.expr)
+		switch {
+		case x.op == "type" && !types.Identical(t, want):
+			return false
+		case x.op == "asgn" && !types.AssignableTo(t, want):
+			return false
+		case x.op == "conv" && !types.ConvertibleTo(t, want):
+			return false
+		}
+	case typProperty:
+		switch {
+		case x == "comp" && !types.Comparable(t):
+			return false
+		case x == "addr" && !tv.Addressable():
+			return false
+		}
+	case typUnderlying:
+		u := t.Underlying()
+		uok := true
+		switch x {
+		case "basic":
+			_, uok = u.(*types.Basic)
+		case "array":
+			_, uok = u.(*types.Array)
+		case "slice":
+			_, uok = u.(*types.Slice)
+		case "struct":
+			_, uok = u.(*types.Struct)
+		case "interface":
+			_, uok = u.(*types.Interface)
+		case "pointer":
+			_, uok = u.(*types.Pointer)
+		case "func":
+			_, uok = u.(*types.Signature)
+		case "map":
+			_, uok = u.(*types.Map)
+		case "chan":
+			_, uok = u.(*types.Chan)
+		}
+		if !uok {
+			return false
+		}
+	}
+	return true
 }
 
 func (m *matcher) walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
@@ -239,66 +335,6 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		info := m.info(id)
 		if info.any {
 			return false
-		}
-		for _, rx := range info.nameRxs {
-			if !yok || !rx.MatchString(y.Name) {
-				return false
-			}
-		}
-		if info.needExpr() {
-			expr, _ := node.(ast.Expr)
-			if expr == nil {
-				return false // only exprs have types
-			}
-			t := m.Info.TypeOf(expr)
-			if t == nil {
-				return false // an expr, but no type?
-			}
-			tv := m.Info.Types[expr]
-			for _, tc := range info.types {
-				want := m.resolveType(m.scope, tc.expr)
-				switch {
-				case tc.op == "type" && !types.Identical(t, want):
-					return false
-				case tc.op == "asgn" && !types.AssignableTo(t, want):
-					return false
-				case tc.op == "conv" && !types.ConvertibleTo(t, want):
-					return false
-				}
-			}
-			for _, op := range info.extras {
-				switch {
-				case op == "comp" && !types.Comparable(t):
-					return false
-				case op == "addr" && !tv.Addressable():
-					return false
-				}
-			}
-			u := t.Underlying()
-			uok := true
-			switch info.underlying {
-			case "basic":
-				_, uok = u.(*types.Basic)
-			case "array":
-				_, uok = u.(*types.Array)
-			case "slice":
-				_, uok = u.(*types.Slice)
-			case "struct":
-				_, uok = u.(*types.Struct)
-			case "interface":
-				_, uok = u.(*types.Interface)
-			case "pointer":
-				_, uok = u.(*types.Pointer)
-			case "func":
-				_, uok = u.(*types.Signature)
-			case "map":
-				_, uok = u.(*types.Map)
-			case "chan":
-				_, uok = u.(*types.Chan)
-			}
-			if !uok {
-				return false
-			}
 		}
 		if info.name == "_" {
 			// values are discarded, matches anything
@@ -541,6 +577,10 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		y, ok := node.(*ast.RangeStmt)
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
 			m.node(x.X, y.X) && m.node(x.Body, y.Body)
+
+	case *ast.TypeSpec, *ast.FieldList:
+		// we ignore these, for now
+		return false
 	default:
 		panic(fmt.Sprintf("unexpected node: %T", x))
 	}

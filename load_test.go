@@ -27,7 +27,7 @@ func TestLoad(t *testing.T) {
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "testdata/two/file1.go", "testdata/two/file2.go"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "testdata/two/file1.go", "testdata/two/file2.go"},
 			fmt.Errorf("package p2; expected p1"),
 		},
 		{
@@ -35,7 +35,7 @@ func TestLoad(t *testing.T) {
 			fmt.Errorf("no such file or directory"),
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "noexist.go"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "noexist.go"},
 			fmt.Errorf("no such file or directory"),
 		},
 		{
@@ -43,7 +43,7 @@ func TestLoad(t *testing.T) {
 			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "./testdata/two"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "./testdata/two"},
 			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
 		},
 		{
@@ -51,11 +51,11 @@ func TestLoad(t *testing.T) {
 			`testdata/src/p1/file1.go:3:1: var _ = "file1"`,
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "p1"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "p1"},
 			`testdata/src/p1/file1.go:3:1: var _ = "file1"`,
 		},
 		{
-			[]string{"-x", "var _ = $(x type(int))", "p1"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(int)", "p1"},
 			``, // different type
 		},
 		{
@@ -69,7 +69,7 @@ func TestLoad(t *testing.T) {
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "p1/..."},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "p1/..."},
 			`
 				testdata/src/p1/file1.go:3:1: var _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
@@ -88,7 +88,7 @@ func TestLoad(t *testing.T) {
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $(x type(string))", "-r", "p1"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "-r", "p1"},
 			`
 				testdata/src/p1/file1.go:3:1: var _ = "file1"
 				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"

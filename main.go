@@ -23,44 +23,35 @@ import (
 var usage = func() {
 	fmt.Fprint(os.Stderr, `usage: gogrep commands [packages]
 
-Options:
+gogrep performs a query on the given Go packages.
 
   -r   match all dependencies recursively too
 
-A command is of the form "-A pattern", where -A is one of:
+A command is one of the following:
 
-  -x   find all nodes matching a pattern
-  -g   discard nodes not matching a pattern
-  -v   discard nodes matching a pattern
-  -s   substitute with a given syntax tree
-  -w   write source back to disk or stdout
+  -x pattern    find all nodes matching a pattern
+  -g pattern    discard nodes not matching a pattern
+  -v pattern    discard nodes matching a pattern
+  -a attribute  discard nodes without an attribute
+  -s pattern    substitute with a given syntax tree
+  -p number     naviate up a number of node parents
+  -w            write the entire source code back
 
-If -A is ommitted for a single command, -x will be assumed.
+A pattern is a piece of Go code which may include dollar expressions. It can be
+a number of statements, a number of expressions, a declaration, or an entire
+file.
 
-A pattern is a piece of Go code which may include wildcards. It can be:
+A dollar expression consist of '$' and a name. Dollar expressions with the same
+name within a query always match the same node, excluding "_". Example:
 
-       a statement (many if split by semicolonss)
-       an expression (many if split by commas)
-       a type expression
-       a top-level declaration (var, func, const)
-       an entire file
-
-Wildcards consist of '$' and a name. All wildcards with the same name
-within an expression must match the same node, excluding "_". Example:
-
-       $x.$_ = $x // assignment of self to a field in self
+       -x '$x.$_ = $x' # assignment of self to a field in self
 
 If '*' is before the name, it will match any number of nodes. Example:
 
-       fmt.Fprintf(os.Stdout, $*_) // all Fprintfs on stdout
+       -x 'fmt.Fprintf(os.Stdout, $*_)' # all Fprintfs on stdout
 
-Regexes can also be used to match certain identifier names only. The
-'.*' pattern can be used to match all identifiers. Example:
-
-       fmt.$(_ /Fprint.*/)(os.Stdout, $*_) // all Fprint* on stdout
-
-The nodes resulting from applying the commands will be printed line by
-line to standard output.
+By default, the resulting nodes will be printed one per line to standard output.
+To update the input files, use -w.
 `)
 }
 
@@ -101,21 +92,8 @@ type matcher struct {
 }
 
 type varInfo struct {
-	name       string
-	any        bool
-	nameRxs    []*regexp.Regexp
-	types      []typeCheck
-	extras     []string
-	underlying string
-}
-
-func (v varInfo) needExpr() bool {
-	return len(v.types) > 0 || len(v.extras) > 0 || v.underlying != ""
-}
-
-type typeCheck struct {
-	op   string // "type", "asgn", "conv"
-	expr ast.Expr
+	name string
+	any  bool
 }
 
 func (m *matcher) info(id int) varInfo {
@@ -126,9 +104,9 @@ func (m *matcher) info(id int) varInfo {
 }
 
 type exprCmd struct {
-	name string
-	src  string
-	node ast.Node
+	name  string
+	src   string
+	value interface{}
 }
 
 type strCmdFlag struct {
@@ -214,9 +192,17 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		cmds: &cmds,
 	}, "v", "")
 	flagSet.Var(&strCmdFlag{
+		name: "a",
+		cmds: &cmds,
+	}, "a", "")
+	flagSet.Var(&strCmdFlag{
 		name: "s",
 		cmds: &cmds,
 	}, "s", "")
+	flagSet.Var(&strCmdFlag{
+		name: "p",
+		cmds: &cmds,
+	}, "p", "")
 	flagSet.Var(&boolCmdFlag{
 		name: "w",
 		cmds: &cmds,
@@ -224,10 +210,6 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	flagSet.Parse(args)
 	paths := flagSet.Args()
 
-	if len(cmds) == 0 && len(paths) > 0 {
-		cmds = append(cmds, exprCmd{name: "x", src: paths[0]})
-		paths = paths[1:]
-	}
 	if len(cmds) < 1 {
 		return nil, nil, fmt.Errorf("need at least one command")
 	}
@@ -235,12 +217,25 @@ func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 		switch cmd.name {
 		case "w":
 			continue // no expr
+		case "p":
+			n, err := strconv.Atoi(cmd.src)
+			if err != nil {
+				return nil, nil, err
+			}
+			cmds[i].value = n
+		case "a":
+			m, err := m.parseAttrs(cmd.src)
+			if err != nil {
+				return nil, nil, fmt.Errorf("cannot parse mods: %v", err)
+			}
+			cmds[i].value = m
+		default:
+			node, err := m.parseExpr(cmd.src)
+			if err != nil {
+				return nil, nil, err
+			}
+			cmds[i].value = node
 		}
-		node, err := m.parseExpr(cmd.src)
-		if err != nil {
-			return nil, nil, err
-		}
-		cmds[i].node = node
 	}
 	return cmds, paths, nil
 }

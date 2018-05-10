@@ -15,465 +15,620 @@ import (
 type wantErr string
 
 func tokErr(msg string) wantErr   { return wantErr("cannot tokenize expr: " + msg) }
+func modErr(msg string) wantErr   { return wantErr("cannot parse mods: " + msg) }
 func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) }
 
 type wantSrc string
 
 func TestMatch(t *testing.T) {
 	tests := []struct {
-		args    interface{}
+		args    []string
 		src     string
 		anyWant interface{}
 	}{
 		// expr tokenize errors
-		{"$", "a", tokErr(`1:2: $ must be followed by ident, got EOF`)},
-		{`"`, "a", tokErr(`1:1: string literal not terminated`)},
-		{"", "a", parseErr(`empty source code`)},
-		{"\t", "a", parseErr(`empty source code`)},
-		{"$(x", "a", tokErr(`1:4: expected ) to close $(`)},
-		{"$(x /expr", "a", tokErr(`1:5: expected / to terminate regex`)},
-		{"$(x /foo(bar/)", "a", tokErr("1:1: error parsing regexp: missing closing ): `^foo(bar$`")},
-		{"$(x a", "a", tokErr(`1:1: wanted (`)},
-		{"$(x a(", "a", tokErr(`1:1: unknown op "a"`)},
-		{"$(x comp(", "a", tokErr(`1:1: wanted )`)},
-		{"$(x is(foo))", "a", tokErr(`1:1: unknown type: "foo"`)},
-		{"$(x type(", "a", tokErr(`1:1: expected ) to close (`)},
-		{"$(x type({))", "a", tokErr(`1:1: expected operand, found '{'`)},
+		{[]string{"-x", "$"}, "a", tokErr(`1:2: $ must be followed by ident, got EOF`)},
+		{[]string{"-x", `"`}, "a", tokErr(`1:1: string literal not terminated`)},
+		{[]string{"-x", ""}, "a", parseErr(`empty source code`)},
+		{[]string{"-x", "\t"}, "a", parseErr(`empty source code`)},
+		{
+			[]string{"-x", "$x", "-a", "a"},
+			"a", modErr(`1:2: wanted (`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "a("},
+			"a", modErr(`1:1: unknown op "a"`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "is(foo)"},
+			"a", modErr(`1:4: unknown type: "foo"`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "type("},
+			"a", modErr(`1:5: expected ) to close (`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "type({)"},
+			"a", modErr(`1:1: expected operand, found '{'`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "comp etc"},
+			"a", modErr(`1:6: wanted EOF, got IDENT`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "is(slice) etc"},
+			"a", modErr(`1:11: wanted EOF, got IDENT`),
+		},
 
 		// expr parse errors
-		{"foo)", "a", parseErr(`1:4: expected statement, found ')'`)},
-		{"{", "a", parseErr(`1:4: expected '}', found 'EOF'`)},
-		{"$x)", "a", parseErr(`1:3: expected statement, found ')'`)},
-		{"$x(", "a", parseErr(`1:5: expected operand, found '}'`)},
-		{"$*x)", "a", parseErr(`1:4: expected statement, found ')'`)},
-		{"a\n$x)", "a", parseErr(`2:3: expected statement, found ')'`)},
+		{[]string{"-x", "foo)"}, "a", parseErr(`1:4: expected statement, found ')'`)},
+		{[]string{"-x", "{"}, "a", parseErr(`1:4: expected '}', found 'EOF'`)},
+		{[]string{"-x", "$x)"}, "a", parseErr(`1:3: expected statement, found ')'`)},
+		{[]string{"-x", "$x("}, "a", parseErr(`1:5: expected operand, found '}'`)},
+		{[]string{"-x", "$*x)"}, "a", parseErr(`1:4: expected statement, found ')'`)},
+		{[]string{"-x", "a\n$x)"}, "a", parseErr(`2:3: expected statement, found ')'`)},
 
 		// basic lits
-		{"123", "123", 1},
-		{"false", "true", 0},
+		{[]string{"-x", "123"}, "123", 1},
+		{[]string{"-x", "false"}, "true", 0},
 
 		// wildcards
-		{"$x", "rune", 1},
-		{"foo($x, $x)", "foo(1, 2)", 0},
-		{"foo($_, $_)", "foo(1, 2)", 1},
-		{"foo($x, $y, $y)", "foo(1, 2, 2)", 1},
-		{"$(x)", `"foo"`, 1},
+		{[]string{"-x", "$x"}, "rune", 1},
+		{[]string{"-x", "foo($x, $x)"}, "foo(1, 2)", 0},
+		{[]string{"-x", "foo($_, $_)"}, "foo(1, 2)", 1},
+		{[]string{"-x", "foo($x, $y, $y)"}, "foo(1, 2, 2)", 1},
+		{[]string{"-x", "$x"}, `"foo"`, 1},
 
 		// recursion
-		{"$x", "a + b", 3},
-		{"$x + $x", "foo(a + a, b + b)", 2},
-		{"$x", "var a int", 4},
-		{"go foo()", "a(); go foo(); a()", 1},
+		{[]string{"-x", "$x"}, "a + b", 3},
+		{[]string{"-x", "$x + $x"}, "foo(a + a, b + b)", 2},
+		{[]string{"-x", "$x"}, "var a int", 4},
+		{[]string{"-x", "go foo()"}, "a(); go foo(); a()", 1},
 
 		// ident regex matches
-		{"$(x /foo/)", "bar", 0},
-		{"$(x /foo/)", "foo", 1},
-		{"$(x /foo/)", "_foo", 0},
-		{"$(x /foo/)", "foo_", 0},
-		{"$(x /.*foo.*/)", "_foo_", 1},
-		{"$(x /.*/) = $_", "a = b", 1},
-		{"$(x /.*/) = $_", "a.field = b", 0},
-		{"$(x /.*foo.*/ /.*bar.*/)", "foobar; barfoo; foo; barbar", 2},
+		{
+			[]string{"-x", "$x", "-a", "rx(`foo`)"},
+			"bar", 0,
+		},
+		{
+			[]string{"-x", "$x", "-a", "rx(`foo`)"},
+			"foo", 1,
+		},
+		{
+			[]string{"-x", "$x", "-a", "rx(`foo`)"},
+			"_foo", 0,
+		},
+		{
+			[]string{"-x", "$x", "-a", "rx(`foo`)"},
+			"foo_", 0,
+		},
+		{
+			[]string{"-x", "$x", "-a", "rx(`.*foo.*`)"},
+			"_foo_", 1,
+		},
+		{
+			[]string{"-x", "$x = $_", "-x", "$x", "-a", "rx(`.*`)"},
+			"a = b", 1,
+		},
+		{
+			[]string{"-x", "$x = $_", "-x", "$x", "-a", "rx(`.*`)"},
+			"a.field = b", 0,
+		},
+		{
+			[]string{"-x", "$x", "-a", "rx(`.*foo.*`)", "-a", "rx(`.*bar.*`)"},
+			"foobar; barfoo; foo; barbar", 2,
+		},
 
 		// type equality
-		{"$(x type(int))", "package p; var i int", 2}, // includes "int" the type
-		{"append($(x type([]int)))", "package p; var _ = append([]int32{3})", 0},
-		{"append($(x type([]int)))", "package p; var _ = append([]int{3})", 1},
-		{"var _ = $(_ type([2]int))", "package p; var _ = [...]int{1}", 0},
-		{"var _ = $(_ type([2]int))", "package p; var _ = [...]int{1, 2}", 1},
-		{"var _ = $(_ type([2]int))", "package p; var _ = []int{1, 2}", 0},
-		{"var _ = $(_ type(*int))", "package p; var _ = int(3)", 0},
-		{"var _ = $(_ type(*int))", "package p; var _ = new(int)", 1},
 		{
-			"var _ = $(_ type(io.Reader))",
+			[]string{"-x", "$x", "-a", "type(int)"},
+			"package p; var i int", 2, // includes "int" the type
+		},
+		{
+			[]string{"-x", "append($x)", "-x", "$x", "-a", "type([]int)"},
+			"package p; var _ = append([]int32{3})", 0,
+		},
+		{
+			[]string{"-x", "append($x)", "-x", "$x", "-a", "type([]int)"},
+			"package p; var _ = append([]int{3})", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
+			"package p; var _ = [...]int{1}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
+			"package p; var _ = [...]int{1, 2}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
+			"package p; var _ = []int{1, 2}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(*int)"},
+			"package p; var _ = int(3)", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(*int)"},
+			"package p; var _ = new(int)", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(io.Reader)"},
 			`package p; import "io"; var _ = io.Writer(nil)`, 0,
 		},
 		{
-			"var _ = $(_ type(io.Reader))",
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(io.Reader)"},
 			`package p; import "io"; var _ = io.Reader(nil)`, 1,
 		},
 		{
-			"$(_ type(int))",
+			[]string{"-x", "$x", "-a", "type(int)"},
 			`package p; type I int; func (i I) p() { print(i) }`, 1,
 		},
 
 		// type assignability
-		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
 		{
-			"var $(x type(io.Reader)) $_",
+			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "type(int)"},
+			"package p; const _ = 3", 0,
+		},
+		{
+			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(io.Reader)"},
 			`package p; import "os"; var f *os.File`, 0,
 		},
 		{
-			"var $(x asgn(io.Reader)) $_",
+			[]string{"-x", "var $x $_", "-x", "$x", "-a", "asgn(io.Reader)"},
 			`package p; import "os"; var f *os.File`, 1,
 		},
 		{
-			"var $(x asgn(io.Writer)) $_",
+			[]string{"-x", "var $x $_", "-x", "$x", "-a", "asgn(io.Writer)"},
 			`package p; import "io"; var r io.Reader`, 0,
 		},
 		{
-			"var $_ $_ = $(x asgn(*url.URL))",
+			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
 			`package p; var _ interface{} = 0`, 0,
 		},
 		{
-			"var $_ $_ = $(x asgn(*url.URL))",
+			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
 			`package p; var _ interface{} = nil`, 1,
 		},
 
 		// type conversions
-		{"const _ = $(x type(int))", "package p; const _ = 3", 0},
-		{"const _ = $(x conv(int))", "package p; const _ = 3", 1},
-		{"const _ = $(x conv(int32))", "package p; const _ = 3", 1},
-		{"const _ = $(x conv([]byte))", "package p; const _ = 3", 0},
-		{"var $(x type(int)) $_", "package p; type I int; var i I", 0},
-		{"var $(x conv(int)) $_", "package p; type I int; var i I", 1},
+		{
+			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "type(int)"},
+			"package p; const _ = 3", 0,
+		},
+		{
+			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv(int)"},
+			"package p; const _ = 3", 1,
+		},
+		{
+			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv(int32)"},
+			"package p; const _ = 3", 1,
+		},
+		{
+			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv([]byte)"},
+			"package p; const _ = 3", 0,
+		},
+		{
+			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(int)"},
+			"package p; type I int; var i I", 0,
+		},
+		{
+			[]string{"-x", "var $x $_", "-x", "$x", "-a", "conv(int)"},
+			"package p; type I int; var i I", 1,
+		},
 
 		// comparable types
-		{"var _ = $(_ comp())", "package p; var _ = []byte{0}", 0},
-		{"var _ = $(_ comp())", "package p; var _ = [...]byte{0}", 1},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "comp"},
+			"package p; var _ = []byte{0}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "comp"},
+			"package p; var _ = [...]byte{0}", 1,
+		},
 
 		// addressable expressions
-		{"var _ = $(_ addr())", "package p; var _ = []byte{0}", 0},
 		{
-			"var _ = $(_ addr())",
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "addr"},
+			"package p; var _ = []byte{0}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "addr"},
 			"package p; var s struct { i int }; var _ = s.i", 1,
 		},
 
 		// underlying types
-		{"var _ = $(_ is(basic))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(basic))", "package p; var _ = 3", 1},
-		{"var _ = $(_ is(basic))", `package p; import "io"; var _ = io.SeekEnd`, 1},
-		{"var _ = $(_ is(array))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(array))", "package p; var _ = [...]byte{}", 1},
-		{"var _ = $(_ is(slice))", "package p; var _ = []byte{}", 1},
-		{"var _ = $(_ is(slice))", "package p; var _ = [...]byte{}", 0},
-		{"var _ = $(_ is(struct))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(struct))", "package p; var _ = struct{}{}", 1},
-		{"var _ = $(_ is(interface))", "package p; var _ = struct{}{}", 0},
-		{"var _ = $(_ is(interface))", "package p; var _ = interface{}(nil)", 1},
-		{"var _ = $(_ is(pointer))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(pointer))", "package p; var _ = new(byte)", 1},
-		{"var _ = $(_ is(func))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(func))", "package p; var _ = func() {}", 1},
-		{"var _ = $(_ is(map))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(map))", "package p; var _ = map[int]int{}", 1},
-		{"var _ = $(_ is(chan))", "package p; var _ = []byte{}", 0},
-		{"var _ = $(_ is(chan))", "package p; var _ = make(chan int)", 1},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
+			"package p; var _ = 3", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
+			`package p; import "io"; var _ = io.SeekEnd`, 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(array)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(array)"},
+			"package p; var _ = [...]byte{}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(slice)"},
+			"package p; var _ = []byte{}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(slice)"},
+			"package p; var _ = [...]byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(struct)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(struct)"},
+			"package p; var _ = struct{}{}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(interface)"},
+			"package p; var _ = struct{}{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(interface)"},
+			"package p; var _ = interface{}(nil)", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(pointer)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(pointer)"},
+			"package p; var _ = new(byte)", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(func)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(func)"},
+			"package p; var _ = func() {}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(map)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(map)"},
+			"package p; var _ = map[int]int{}", 1,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(chan)"},
+			"package p; var _ = []byte{}", 0,
+		},
+		{
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(chan)"},
+			"package p; var _ = make(chan int)", 1,
+		},
 
 		// many value expressions
-		{"$x, $y", "foo(1, 2)", 1},
-		{"$x, $y", "1", 0},
-		{"$x", "a, b", 3},
+		{[]string{"-x", "$x, $y"}, "foo(1, 2)", 1},
+		{[]string{"-x", "$x, $y"}, "1", 0},
+		{[]string{"-x", "$x"}, "a, b", 3},
 		// unlike statements, expressions don't automatically
 		// imply partial matches
-		{"b, c", "a, b, c, d", 0},
-		{"b, c", "foo(a, b, c, d)", 0},
-		{"print($*_, $x)", "print(a, b, c)", 1},
+		{[]string{"-x", "b, c"}, "a, b, c, d", 0},
+		{[]string{"-x", "b, c"}, "foo(a, b, c, d)", 0},
+		{[]string{"-x", "print($*_, $x)"}, "print(a, b, c)", 1},
 
 		// any number of expressions
-		{"$*x", "a, b", "a, b"},
-		{"print($*x)", "print()", 1},
-		{"print($*x)", "print(a, b)", 1},
-		{"print($*x, $y, $*z)", "print()", 0},
-		{"print($*x, $y, $*z)", "print(a)", 1},
-		{"print($*x, $y, $*z)", "print(a, b, c)", 1},
-		{"{ $*_; return nil }", "{ return nil }", 1},
-		{"{ $*_; return nil }", "{ a(); b(); return nil }", 1},
-		{"c($*x); c($*x)", "c(); c()", 1},
-		{"c($*x); c()", "c(); c()", 1},
-		{"c($*x); c($*x)", "c(x); c(y)", 0},
-		{"c($*x); c($*x)", "c(x, y); c(z)", 0},
-		{"c($*x); c($*x)", "c(x, y); c(x, y)", 1},
-		{"c($*x, y); c($*x, y)", "c(x, y); c(x, y)", 1},
-		{"c($*x, $*y); c($*x, $*y)", "c(x, y); c(x, y)", 1},
+		{[]string{"-x", "$*x"}, "a, b", "a, b"},
+		{[]string{"-x", "print($*x)"}, "print()", 1},
+		{[]string{"-x", "print($*x)"}, "print(a, b)", 1},
+		{[]string{"-x", "print($*x, $y, $*z)"}, "print()", 0},
+		{[]string{"-x", "print($*x, $y, $*z)"}, "print(a)", 1},
+		{[]string{"-x", "print($*x, $y, $*z)"}, "print(a, b, c)", 1},
+		{[]string{"-x", "{ $*_; return nil }"}, "{ return nil }", 1},
+		{[]string{"-x", "{ $*_; return nil }"}, "{ a(); b(); return nil }", 1},
+		{[]string{"-x", "c($*x); c($*x)"}, "c(); c()", 1},
+		{[]string{"-x", "c($*x); c()"}, "c(); c()", 1},
+		{[]string{"-x", "c($*x); c($*x)"}, "c(x); c(y)", 0},
+		{[]string{"-x", "c($*x); c($*x)"}, "c(x, y); c(z)", 0},
+		{[]string{"-x", "c($*x); c($*x)"}, "c(x, y); c(x, y)", 1},
+		{[]string{"-x", "c($*x, y); c($*x, y)"}, "c(x, y); c(x, y)", 1},
+		{[]string{"-x", "c($*x, $*y); c($*x, $*y)"}, "c(x, y); c(x, y)", 1},
 
 		// composite lits
-		{"[]float64{$x}", "[]float64{3}", 1},
-		{"[2]bool{$x, 0}", "[2]bool{3, 1}", 0},
-		{"someStruct{fld: $x}", "someStruct{fld: a, fld2: b}", 0},
-		{"map[int]int{1: $x}", "map[int]int{1: a}", 1},
+		{[]string{"-x", "[]float64{$x}"}, "[]float64{3}", 1},
+		{[]string{"-x", "[2]bool{$x, 0}"}, "[2]bool{3, 1}", 0},
+		{[]string{"-x", "someStruct{fld: $x}"}, "someStruct{fld: a, fld2: b}", 0},
+		{[]string{"-x", "map[int]int{1: $x}"}, "map[int]int{1: a}", 1},
 
 		// func lits
-		{"func($s string) { print($s) }", "func(a string) { print(a) }", 1},
-		{"func($x ...$t) {}", "func(a ...int) {}", 1},
+		{[]string{"-x", "func($s string) { print($s) }"}, "func(a string) { print(a) }", 1},
+		{[]string{"-x", "func($x ...$t) {}"}, "func(a ...int) {}", 1},
 
 		// type exprs
-		{"[8]$x", "[8]int", 1},
-		{"struct{field $t}", "struct{field int}", 1},
-		{"struct{field $t}", "struct{field int}", 1},
-		{"struct{field $t}", "struct{other int}", 0},
-		{"struct{field $t}", "struct{f1, f2 int}", 0},
-		{"interface{$x() int}", "interface{i() int}", 1},
-		{"chan $x", "chan bool", 1},
-		{"<-chan $x", "chan bool", 0},
-		{"chan $x", "chan<- bool", 0},
+		{[]string{"-x", "[8]$x"}, "[8]int", 1},
+		{[]string{"-x", "struct{field $t}"}, "struct{field int}", 1},
+		{[]string{"-x", "struct{field $t}"}, "struct{field int}", 1},
+		{[]string{"-x", "struct{field $t}"}, "struct{other int}", 0},
+		{[]string{"-x", "struct{field $t}"}, "struct{f1, f2 int}", 0},
+		{[]string{"-x", "interface{$x() int}"}, "interface{i() int}", 1},
+		{[]string{"-x", "chan $x"}, "chan bool", 1},
+		{[]string{"-x", "<-chan $x"}, "chan bool", 0},
+		{[]string{"-x", "chan $x"}, "chan<- bool", 0},
 
 		// many types (TODO; revisit)
-		// {"chan $x, interface{}", "chan int, interface{}", 1},
-		// {"chan $x, interface{}", "chan int", 0},
-		// {"$x string, $y int", "func(s string, i int) {}", 1},
+		// {[]string{"-x", "chan $x, interface{}"}, "chan int, interface{}", 1},
+		// {[]string{"-x", "chan $x, interface{}"}, "chan int", 0},
+		// {[]string{"-x", "$x string, $y int"}, "func(s string, i int) {}", 1},
 
 		// parens
-		{"($x)", "(a + b)", 1},
-		{"($x)", "a + b", 0},
+		{[]string{"-x", "($x)"}, "(a + b)", 1},
+		{[]string{"-x", "($x)"}, "a + b", 0},
 
 		// unary ops
-		{[]string{"--", "-someConst"}, "- someConst", 1},
-		{"*someVar", "* someVar", 1},
+		{[]string{"-x", "-someConst"}, "- someConst", 1},
+		{[]string{"-x", "*someVar"}, "* someVar", 1},
 
 		// binary ops
-		{"$x == $y", "a == b", 1},
-		{"$x == $y", "123", 0},
-		{"$x == $y", "a != b", 0},
-		{"$x - $x", "a - b", 0},
+		{[]string{"-x", "$x == $y"}, "a == b", 1},
+		{[]string{"-x", "$x == $y"}, "123", 0},
+		{[]string{"-x", "$x == $y"}, "a != b", 0},
+		{[]string{"-x", "$x - $x"}, "a - b", 0},
 
 		// calls
-		{"someFunc($x)", "someFunc(a > b)", 1},
+		{[]string{"-x", "someFunc($x)"}, "someFunc(a > b)", 1},
 
 		// selector
-		{"$x.Field", "a.Field", 1},
-		{"$x.Field", "a.field", 0},
-		{"$x.Method()", "a.Method()", 1},
-		{"a.b", "a.b.c", 1},
-		{"b.c", "a.b.c", 0},
-		{"$x.c", "a.b.c", 1},
-		{"a.$x", "a.b.c", 1},
+		{[]string{"-x", "$x.Field"}, "a.Field", 1},
+		{[]string{"-x", "$x.Field"}, "a.field", 0},
+		{[]string{"-x", "$x.Method()"}, "a.Method()", 1},
+		{[]string{"-x", "a.b"}, "a.b.c", 1},
+		{[]string{"-x", "b.c"}, "a.b.c", 0},
+		{[]string{"-x", "$x.c"}, "a.b.c", 1},
+		{[]string{"-x", "a.$x"}, "a.b.c", 1},
 
 		// indexes
-		{"$x[len($x)-1]", "a[len(a)-1]", 1},
-		{"$x[len($x)-1]", "a[len(b)-1]", 0},
+		{[]string{"-x", "$x[len($x)-1]"}, "a[len(a)-1]", 1},
+		{[]string{"-x", "$x[len($x)-1]"}, "a[len(b)-1]", 0},
 
 		// slicing
-		{"$x[:$y]", "a[:1]", 1},
-		{"$x[3:]", "a[3:5:5]", 0},
+		{[]string{"-x", "$x[:$y]"}, "a[:1]", 1},
+		{[]string{"-x", "$x[3:]"}, "a[3:5:5]", 0},
 
 		// type asserts
-		{"$x.(string)", "a.(string)", 1},
+		{[]string{"-x", "$x.(string)"}, "a.(string)", 1},
 
 		// elipsis
-		{"append($x, $y...)", "append(a, bs...)", 1},
-		{"foo($x...)", "foo(a)", 0},
-		{"foo($x...)", "foo(a, b)", 0},
+		{[]string{"-x", "append($x, $y...)"}, "append(a, bs...)", 1},
+		{[]string{"-x", "foo($x...)"}, "foo(a)", 0},
+		{[]string{"-x", "foo($x...)"}, "foo(a, b)", 0},
 
 		// forcing node to be a statement
-		{"append($*_);", "f(); x = append(x, a)", 0},
-		{"append($*_);", "f(); append(x, a)", 1},
+		{[]string{"-x", "append($*_);"}, "f(); x = append(x, a)", 0},
+		{[]string{"-x", "append($*_);"}, "f(); append(x, a)", 1},
 
 		// many statements
-		{"$x(); $y()", "a(); b()", 1},
-		{"$x(); $y()", "a()", 0},
-		{"$x", "a; b", 3},
-		{"b; c", "b", 0},
-		{"b; c", "b; c", 1},
-		{"b; c", "b; x; c", 0},
-		{"b; c", "a; b; c; d", "b; c"},
-		{"b; c", "{b; c; d}", 1},
-		{"b; c", "{a; b; c}", 1},
-		{"b; c", "{b; b; c; c}", "b; c"},
-		{"$x++; $x--", "n; a++; b++; b--", "b++; b--"},
-		{"$*_; b; $*_", "{a; b; c; d}", "a; b; c; d"},
-		{"{$*_; $x}", "{a; b; c}", 1},
-		{"{b; c}", "{a; b; c}", 0},
-		{"$x := $_; $x = $_", "a := n; b := n; b = m", "b := n; b = m"},
-		{"$x := $_; $*_; $x = $_", "a := n; b := n; b = m", "b := n; b = m"},
+		{[]string{"-x", "$x(); $y()"}, "a(); b()", 1},
+		{[]string{"-x", "$x(); $y()"}, "a()", 0},
+		{[]string{"-x", "$x"}, "a; b", 3},
+		{[]string{"-x", "b; c"}, "b", 0},
+		{[]string{"-x", "b; c"}, "b; c", 1},
+		{[]string{"-x", "b; c"}, "b; x; c", 0},
+		{[]string{"-x", "b; c"}, "a; b; c; d", "b; c"},
+		{[]string{"-x", "b; c"}, "{b; c; d}", 1},
+		{[]string{"-x", "b; c"}, "{a; b; c}", 1},
+		{[]string{"-x", "b; c"}, "{b; b; c; c}", "b; c"},
+		{[]string{"-x", "$x++; $x--"}, "n; a++; b++; b--", "b++; b--"},
+		{[]string{"-x", "$*_; b; $*_"}, "{a; b; c; d}", "a; b; c; d"},
+		{[]string{"-x", "{$*_; $x}"}, "{a; b; c}", 1},
+		{[]string{"-x", "{b; c}"}, "{a; b; c}", 0},
+		{[]string{"-x", "$x := $_; $x = $_"}, "a := n; b := n; b = m", "b := n; b = m"},
+		{[]string{"-x", "$x := $_; $*_; $x = $_"}, "a := n; b := n; b = m", "b := n; b = m"},
 
 		// mixing lists
-		{"$x, $y", "1; 2", 0},
-		{"$x; $y", "1, 2", 0},
+		{[]string{"-x", "$x, $y"}, "1; 2", 0},
+		{[]string{"-x", "$x; $y"}, "1, 2", 0},
 
 		// any number of statements
-		{"$*x", "a; b", "a; b"},
-		{"$*x; b; $*y", "a; b; c", 1},
-		{"$*x; b; $*x", "a; b; c", 0},
+		{[]string{"-x", "$*x"}, "a; b", "a; b"},
+		{[]string{"-x", "$*x; b; $*y"}, "a; b; c", 1},
+		{[]string{"-x", "$*x; b; $*x"}, "a; b; c", 0},
 
 		// declarations
-		{"const $x = $y", "const a = b", 1},
-		{"const $x = $y", "const (a = b)", 1},
-		{"const $x = $y", "const (a = b\nc = d)", 0},
-		{"var $x int", "var a int", 1},
-		{"var $x int", "var a int = 3", 0},
+		{[]string{"-x", "const $x = $y"}, "const a = b", 1},
+		{[]string{"-x", "const $x = $y"}, "const (a = b)", 1},
+		{[]string{"-x", "const $x = $y"}, "const (a = b\nc = d)", 0},
+		{[]string{"-x", "var $x int"}, "var a int", 1},
+		{[]string{"-x", "var $x int"}, "var a int = 3", 0},
 		{
-			"func $_($x $y) $y { return $x }",
+			[]string{"-x", "func $_($x $y) $y { return $x }"},
 			"func a(i int) int { return i }", 1,
 		},
 
 		// value specs
-		{"$_ int", "var a int", 1},
-		{"$_ int", "var a bool", 0},
+		{[]string{"-x", "$_ int"}, "var a int", 1},
+		{[]string{"-x", "$_ int"}, "var a bool", 0},
 		// TODO: consider these
-		{"$_ int", "var a int = 3", 0},
-		{"$_ int", "var a, b int", 0},
-		{"$_ int", "func(i int) { println(i) }", 0},
+		{[]string{"-x", "$_ int"}, "var a int = 3", 0},
+		{[]string{"-x", "$_ int"}, "var a, b int", 0},
+		{[]string{"-x", "$_ int"}, "func(i int) { println(i) }", 0},
 
 		// entire files
-		{"package $_", "package p; var a = 1", 0},
-		{"package $_; func Foo() { $*_ }", "package p; func Foo() {}", 1},
+		{[]string{"-x", "package $_"}, "package p; var a = 1", 0},
+		{[]string{"-x", "package $_; func Foo() { $*_ }"}, "package p; func Foo() {}", 1},
 
 		// blocks
-		{"{ $x }", "{ a() }", 1},
-		{"{ $x }", "{ a(); b() }", 0},
+		{[]string{"-x", "{ $x }"}, "{ a() }", 1},
+		{[]string{"-x", "{ $x }"}, "{ a(); b() }", 0},
 
 		// assigns
-		{"$x = $y", "a = b", 1},
-		{"$x := $y", "a, b := c()", 0},
+		{[]string{"-x", "$x = $y"}, "a = b", 1},
+		{[]string{"-x", "$x := $y"}, "a, b := c()", 0},
 
 		// if stmts
-		{"if $x != nil { $y }", "if p != nil { p.foo() }", 1},
-		{"if $x { $y }", "if a { b() } else { c() }", 0},
-		{"if $x != nil { $y }", "if a != nil { return a }", 1},
+		{[]string{"-x", "if $x != nil { $y }"}, "if p != nil { p.foo() }", 1},
+		{[]string{"-x", "if $x { $y }"}, "if a { b() } else { c() }", 0},
+		{[]string{"-x", "if $x != nil { $y }"}, "if a != nil { return a }", 1},
 
 		// for and range stmts
-		{"for $x { $y }", "for b { c() }", 1},
-		{"for $x := range $y { $z }", "for i := range l { c() }", 1},
-		{"for range $y { $z }", "for _, e := range l { e() }", 0},
+		{[]string{"-x", "for $x { $y }"}, "for b { c() }", 1},
+		{[]string{"-x", "for $x := range $y { $z }"}, "for i := range l { c() }", 1},
+		{[]string{"-x", "for range $y { $z }"}, "for _, e := range l { e() }", 0},
 
 		// $*_ matching stmt+expr combos (ifs)
-		{"if $*x {}", "if a {}", 1},
-		{"if $*x {}", "if a(); b {}", 1},
-		{"if $*x {}; if $*x {}", "if a(); b {}; if a(); b {}", 1},
-		{"if $*x {}; if $*x {}", "if a(); b {}; if b {}", 0},
-		{"if $*_ {} else {}", "if a(); b {}", 0},
-		{"if $*_ {} else {}", "if a(); b {} else {}", 1},
-		{"if a(); $*_ {}", "if b {}", 0},
+		{[]string{"-x", "if $*x {}"}, "if a {}", 1},
+		{[]string{"-x", "if $*x {}"}, "if a(); b {}", 1},
+		{[]string{"-x", "if $*x {}; if $*x {}"}, "if a(); b {}; if a(); b {}", 1},
+		{[]string{"-x", "if $*x {}; if $*x {}"}, "if a(); b {}; if b {}", 0},
+		{[]string{"-x", "if $*_ {} else {}"}, "if a(); b {}", 0},
+		{[]string{"-x", "if $*_ {} else {}"}, "if a(); b {} else {}", 1},
+		{[]string{"-x", "if a(); $*_ {}"}, "if b {}", 0},
 
 		// $*_ matching stmt+expr combos (fors)
-		{"for $*x {}", "for {}", 1},
-		{"for $*x {}", "for a {}", 1},
-		{"for $*x {}", "for i(); a; p() {}", 1},
-		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); a; p() {}", 1},
-		{"for $*x {}; for $*x {}", "for i(); a; p() {}; for i(); b; p() {}", 0},
-		{"for a(); $*_; {}", "for b {}", 0},
-		{"for ; $*_; c() {}", "for b {}", 0},
+		{[]string{"-x", "for $*x {}"}, "for {}", 1},
+		{[]string{"-x", "for $*x {}"}, "for a {}", 1},
+		{[]string{"-x", "for $*x {}"}, "for i(); a; p() {}", 1},
+		{[]string{"-x", "for $*x {}; for $*x {}"}, "for i(); a; p() {}; for i(); a; p() {}", 1},
+		{[]string{"-x", "for $*x {}; for $*x {}"}, "for i(); a; p() {}; for i(); b; p() {}", 0},
+		{[]string{"-x", "for a(); $*_; {}"}, "for b {}", 0},
+		{[]string{"-x", "for ; $*_; c() {}"}, "for b {}", 0},
 
 		// $*_ matching stmt+expr combos (switches)
-		{"switch $*x {}", "switch a {}", 1},
-		{"switch $*x {}", "switch a(); b {}", 1},
-		{"switch $*x {}; switch $*x {}", "switch a(); b {}; switch a(); b {}", 1},
-		{"switch $*x {}; switch $*x {}", "switch a(); b {}; switch b {}", 0},
-		{"switch a(); $*_ {}", "for b {}", 0},
+		{[]string{"-x", "switch $*x {}"}, "switch a {}", 1},
+		{[]string{"-x", "switch $*x {}"}, "switch a(); b {}", 1},
+		{[]string{"-x", "switch $*x {}; switch $*x {}"}, "switch a(); b {}; switch a(); b {}", 1},
+		{[]string{"-x", "switch $*x {}; switch $*x {}"}, "switch a(); b {}; switch b {}", 0},
+		{[]string{"-x", "switch a(); $*_ {}"}, "for b {}", 0},
 
 		// $*_ matching stmt+expr combos (node type mixing)
-		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; {}", 1},
-		{"if $*x {}; for $*x {}", "if a(); b {}; for a(); b; c() {}", 0},
+		{[]string{"-x", "if $*x {}; for $*x {}"}, "if a(); b {}; for a(); b; {}", 1},
+		{[]string{"-x", "if $*x {}; for $*x {}"}, "if a(); b {}; for a(); b; c() {}", 0},
 
 		// for $*_ {} matching a range for
-		{"for $_ {}", "for range x {}", 0},
-		{"for $*_ {}", "for range x {}", 1},
-		{"for $*_ {}", "for _, v := range x {}", 1},
+		{[]string{"-x", "for $_ {}"}, "for range x {}", 0},
+		{[]string{"-x", "for $*_ {}"}, "for range x {}", 1},
+		{[]string{"-x", "for $*_ {}"}, "for _, v := range x {}", 1},
 
 		// $*_ matching optional statements (ifs)
-		{"if $*_; b {}", "if b {}", 1},
-		{"if $*_; b {}", "if a := f(); b {}", 1},
+		{[]string{"-x", "if $*_; b {}"}, "if b {}", 1},
+		{[]string{"-x", "if $*_; b {}"}, "if a := f(); b {}", 1},
 		// TODO: should these match?
-		//{"if a(); $*x { f($*x) }", "if a(); b { f(b) }", 1},
-		//{"if a(); $*x { f($*x) }", "if a(); b { f(b, c) }", 0},
-		//{"if $*_; $*_ {}", "if a(); b {}", 1},
+		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b) }", 1},
+		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b, c) }", 0},
+		//{[]string{"-x", "if $*_; $*_ {}"}, "if a(); b {}", 1},
 
 		// $*_ matching optional statements (fors)
-		{"for $*x; b; $*x {}", "for b {}", 1},
-		{"for $*x; b; $*x {}", "for a(); b; a() {}", 1},
-		{"for $*x; b; $*x {}", "for a(); b; c() {}", 0},
+		{[]string{"-x", "for $*x; b; $*x {}"}, "for b {}", 1},
+		{[]string{"-x", "for $*x; b; $*x {}"}, "for a(); b; a() {}", 1},
+		{[]string{"-x", "for $*x; b; $*x {}"}, "for a(); b; c() {}", 0},
 
 		// $*_ matching optional statements (switches)
-		{"switch $*_; b {}", "switch b := f(); b {}", 1},
-		{"switch $*_; b {}", "switch b := f(); c {}", 0},
+		{[]string{"-x", "switch $*_; b {}"}, "switch b := f(); b {}", 1},
+		{[]string{"-x", "switch $*_; b {}"}, "switch b := f(); c {}", 0},
 
 		// $*_ matching optional statements (ifs)
-		{"if $*_; b {}", "if b {}", 1},
-		{"if $*_; b {}", "if a := f(); b {}", 1},
+		{[]string{"-x", "if $*_; b {}"}, "if b {}", 1},
+		{[]string{"-x", "if $*_; b {}"}, "if a := f(); b {}", 1},
 		// TODO: fix
-		//{"if a(); $*x { f($*x) }", "if a(); b { f(b) }", 1},
-		//{"if a(); $*x { f($*x) }", "if a(); b { f(b, c) }", 0},
+		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b) }", 1},
+		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b, c) }", 0},
 
 		// inc/dec stmts
-		{"$x++", "a[b]++", 1},
-		{"$x--", "a++", 0},
+		{[]string{"-x", "$x++"}, "a[b]++", 1},
+		{[]string{"-x", "$x--"}, "a++", 0},
 
 		// returns
-		{"return nil, $x", "{ return nil, err }", 1},
-		{"return nil, $x", "{ return nil, 0, err }", 0},
+		{[]string{"-x", "return nil, $x"}, "{ return nil, err }", 1},
+		{[]string{"-x", "return nil, $x"}, "{ return nil, 0, err }", 0},
 
 		// go stmts
-		{"go $x()", "go func() { a() }()", 1},
-		{"go func() { $x }()", "go func() { a() }()", 1},
-		{"go func() { $x }()", "go a()", 0},
+		{[]string{"-x", "go $x()"}, "go func() { a() }()", 1},
+		{[]string{"-x", "go func() { $x }()"}, "go func() { a() }()", 1},
+		{[]string{"-x", "go func() { $x }()"}, "go a()", 0},
 
 		// defer stmts
-		{"defer $x()", "defer func() { a() }()", 1},
-		{"defer func() { $x }()", "defer func() { a() }()", 1},
-		{"defer func() { $x }()", "defer a()", 0},
+		{[]string{"-x", "defer $x()"}, "defer func() { a() }()", 1},
+		{[]string{"-x", "defer func() { $x }()"}, "defer func() { a() }()", 1},
+		{[]string{"-x", "defer func() { $x }()"}, "defer a()", 0},
 
 		// empty statement
-		{";", ";", 1},
+		{[]string{"-x", ";"}, ";", 1},
 
 		// labeled statement
-		{"foo: a", "foo: a", 1},
-		{"foo: a", "foo: b", 0},
+		{[]string{"-x", "foo: a"}, "foo: a", 1},
+		{[]string{"-x", "foo: a"}, "foo: b", 0},
 
 		// send statement
-		{"x <- 1", "x <- 1", 1},
-		{"x <- 1", "y <- 1", 0},
-		{"x <- 1", "x <- 2", 0},
+		{[]string{"-x", "x <- 1"}, "x <- 1", 1},
+		{[]string{"-x", "x <- 1"}, "y <- 1", 0},
+		{[]string{"-x", "x <- 1"}, "x <- 2", 0},
 
 		// branch statement
-		{"break foo", "break foo", 1},
-		{"break foo", "break bar", 0},
-		{"break foo", "continue foo", 0},
-		{"break", "break", 1},
-		{"break foo", "break", 0},
+		{[]string{"-x", "break foo"}, "break foo", 1},
+		{[]string{"-x", "break foo"}, "break bar", 0},
+		{[]string{"-x", "break foo"}, "continue foo", 0},
+		{[]string{"-x", "break"}, "break", 1},
+		{[]string{"-x", "break foo"}, "break", 0},
 
 		// case clause
-		{"switch x {case 4: x}", "switch x {case 4: x}", 1},
-		{"switch x {case 4: x}", "switch y {case 4: x}", 0},
-		{"switch x {case 4: x}", "switch x {case 5: x}", 0},
-		{"switch {$_}", "switch {case 5: x}", 1},
-		{"switch x {$_}", "switch x {case 5: x}", 1},
-		{"switch x {$*_}", "switch x {case 5: x}", 1},
-		{"switch x {$*_}", "switch x {}", 1},
-		{"switch x {$*_}", "switch x {case 1: a; case 2: b}", 1},
-		{"switch {$a; $a}", "switch {case true: a; case true: a}", 1},
-		{"switch {$a; $a}", "switch {case true: a; case true: b}", 0},
+		{[]string{"-x", "switch x {case 4: x}"}, "switch x {case 4: x}", 1},
+		{[]string{"-x", "switch x {case 4: x}"}, "switch y {case 4: x}", 0},
+		{[]string{"-x", "switch x {case 4: x}"}, "switch x {case 5: x}", 0},
+		{[]string{"-x", "switch {$_}"}, "switch {case 5: x}", 1},
+		{[]string{"-x", "switch x {$_}"}, "switch x {case 5: x}", 1},
+		{[]string{"-x", "switch x {$*_}"}, "switch x {case 5: x}", 1},
+		{[]string{"-x", "switch x {$*_}"}, "switch x {}", 1},
+		{[]string{"-x", "switch x {$*_}"}, "switch x {case 1: a; case 2: b}", 1},
+		{[]string{"-x", "switch {$a; $a}"}, "switch {case true: a; case true: a}", 1},
+		{[]string{"-x", "switch {$a; $a}"}, "switch {case true: a; case true: b}", 0},
 
 		// switch statement
-		{"switch x; y {}", "switch x; y {}", 1},
-		{"switch x {}", "switch x; y {}", 0},
-		{"switch {}", "switch {}", 1},
-		{"switch {}", "switch x {}", 0},
-		{"switch {}", "switch {case y:}", 0},
-		{"switch $_ {}", "switch x {}", 1},
-		{"switch $_ {}", "switch x; y {}", 0},
-		{"switch $_; $_ {}", "switch x {}", 0},
-		{"switch $_; $_ {}", "switch x; y {}", 1},
-		{"switch { $*_; case $*_: $*a }", "switch { case x: y() }", 0},
+		{[]string{"-x", "switch x; y {}"}, "switch x; y {}", 1},
+		{[]string{"-x", "switch x {}"}, "switch x; y {}", 0},
+		{[]string{"-x", "switch {}"}, "switch {}", 1},
+		{[]string{"-x", "switch {}"}, "switch x {}", 0},
+		{[]string{"-x", "switch {}"}, "switch {case y:}", 0},
+		{[]string{"-x", "switch $_ {}"}, "switch x {}", 1},
+		{[]string{"-x", "switch $_ {}"}, "switch x; y {}", 0},
+		{[]string{"-x", "switch $_; $_ {}"}, "switch x {}", 0},
+		{[]string{"-x", "switch $_; $_ {}"}, "switch x; y {}", 1},
+		{[]string{"-x", "switch { $*_; case $*_: $*a }"}, "switch { case x: y() }", 0},
 
 		// type switch statement
-		{"switch x := y.(z); x {}", "switch x := y.(z); x {}", 1},
-		{"switch x := y.(z); x {}", "switch y := y.(z); x {}", 0},
-		{"switch x := y.(z); x {}", "switch y := y.(z); x {}", 0},
+		{[]string{"-x", "switch x := y.(z); x {}"}, "switch x := y.(z); x {}", 1},
+		{[]string{"-x", "switch x := y.(z); x {}"}, "switch y := y.(z); x {}", 0},
+		{[]string{"-x", "switch x := y.(z); x {}"}, "switch y := y.(z); x {}", 0},
 		// TODO more switch variations.
 
 		// TODO select statement
 		// TODO communication clause
-		{"select {$*_}", "select {case <-x: a}", 1},
-		{"select {$*_}", "select {}", 1},
-		{"select {$a; $a}", "select {case <-x: a; case <-x: a}", 1},
-		{"select {$a; $a}", "select {case <-x: a; case <-x: b}", 0},
-		{"select {case x := <-y: f(x)}", "select {case x := <-y: f(x)}", 1},
+		{[]string{"-x", "select {$*_}"}, "select {case <-x: a}", 1},
+		{[]string{"-x", "select {$*_}"}, "select {}", 1},
+		{[]string{"-x", "select {$a; $a}"}, "select {case <-x: a; case <-x: a}", 1},
+		{[]string{"-x", "select {$a; $a}"}, "select {case <-x: a; case <-x: b}", 0},
+		{[]string{"-x", "select {case x := <-y: f(x)}"}, "select {case x := <-y: f(x)}", 1},
 
 		// aggressive mode
-		{"for range $x {}", "for _ = range a {}", 0},
-		{"~ for range $x {}", "for _ = range a {}", 1},
-		{"~ for _ = range $x {}", "for range a {}", 1},
-		{"a int", "var (a, b int; c bool)", 0},
-		{"~ a int", "var (a, b uint; c bool)", 0},
-		{"~ a int", "var (a, b int; c bool)", 1},
-		{"~ a int", "var (a, b int; c bool)", 1},
-		{"{ x; }", "switch { case true: x; }", 0},
-		{"~ { x; }", "switch { case true: x; }", 1},
-		{"a = b", "a = b; a := b", 1},
-		{"a := b", "a = b; a := b", 1},
-		{"~ a = b", "a = b; a := b; var a = b", 3},
-		{"~ a := b", "a = b; a := b; var a = b", 3},
+		{[]string{"-x", "for range $x {}"}, "for _ = range a {}", 0},
+		{[]string{"-x", "~ for range $x {}"}, "for _ = range a {}", 1},
+		{[]string{"-x", "~ for _ = range $x {}"}, "for range a {}", 1},
+		{[]string{"-x", "a int"}, "var (a, b int; c bool)", 0},
+		{[]string{"-x", "~ a int"}, "var (a, b uint; c bool)", 0},
+		{[]string{"-x", "~ a int"}, "var (a, b int; c bool)", 1},
+		{[]string{"-x", "~ a int"}, "var (a, b int; c bool)", 1},
+		{[]string{"-x", "{ x; }"}, "switch { case true: x; }", 0},
+		{[]string{"-x", "~ { x; }"}, "switch { case true: x; }", 1},
+		{[]string{"-x", "a = b"}, "a = b; a := b", 1},
+		{[]string{"-x", "a := b"}, "a = b; a := b", 1},
+		{[]string{"-x", "~ a = b"}, "a = b; a := b; var a = b", 3},
+		{[]string{"-x", "~ a := b"}, "a = b; a := b; var a = b", 3},
 
 		// many cmds
 		{
@@ -576,6 +731,11 @@ func TestMatch(t *testing.T) {
 			`if b = a(); b { }`,
 			`if c(); b { }`,
 		},
+		{
+			[]string{"-x", "foo()", "-p", "1"},
+			`{ if foo() { bar(); }; etc(); }`,
+			`if foo() { bar(); }`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
@@ -606,8 +766,8 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 	if srcErr != nil {
 		t.Fatal(srcErr)
 	}
-	if m.typed {
-		f := srcNode.(*ast.File)
+	f, ok := srcNode.(*ast.File)
+	if m.typed && ok {
 		pkg := types.NewPackage("", "")
 		fset := token.NewFileSet()
 		fset.AddFile("", fset.Base(), len(src)*10)

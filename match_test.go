@@ -52,6 +52,10 @@ func TestMatch(t *testing.T) {
 			"a", modErr(`1:1: expected operand, found '{'`),
 		},
 		{
+			[]string{"-x", "$x", "-a", "type(foo)"},
+			"package p; var i int", 0,
+		},
+		{
 			[]string{"-x", "$x", "-a", "comp etc"},
 			"a", modErr(`1:6: wanted EOF, got IDENT`),
 		},
@@ -163,6 +167,10 @@ func TestMatch(t *testing.T) {
 		{
 			[]string{"-x", "$x", "-a", "type(int)"},
 			`package p; type I int; func (i I) p() { print(i) }`, 1,
+		},
+		{
+			[]string{"-x", "$x", "-a", "type(*I)"},
+			`package p; type I int; var i *I`, 2,
 		},
 
 		// type assignability

@@ -602,10 +602,17 @@ func (m *matcher) wildAnyIdent(node ast.Node) *ast.Ident {
 	return nil
 }
 
+// resolveType resolves a type expression from a given scope.
 func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		_, obj := scope.LookupParent(x.Name, token.NoPos)
+		if obj == nil {
+			// TODO: error if all resolveType calls on a type
+			// expression fail? or perhaps resolve type expressions
+			// across the entire program?
+			return nil
+		}
 		return obj.Type()
 	case *ast.ArrayType:
 		elt := m.resolveType(scope, x.Elt)

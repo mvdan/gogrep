@@ -34,7 +34,7 @@ A command is one of the following:
   -v pattern    discard nodes matching a pattern
   -a attribute  discard nodes without an attribute
   -s pattern    substitute with a given syntax tree
-  -p number     naviate up a number of node parents
+  -p number     navigate up a number of node parents
   -w            write the entire source code back
 
 A pattern is a piece of Go code which may include dollar expressions. It can be

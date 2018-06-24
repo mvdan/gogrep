@@ -293,7 +293,7 @@ func (m *matcher) tokenize(src []byte) ([]fullToken, error) {
 			toks = append(toks, t)
 			continue
 		}
-		wt, err := m.wildcard(t.pos, next, src)
+		wt, err := m.wildcard(t.pos, next)
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +309,7 @@ func (m *matcher) tokenize(src []byte) ([]fullToken, error) {
 	return toks, err
 }
 
-func (m *matcher) wildcard(pos token.Position, next func() fullToken, src []byte) (fullToken, error) {
+func (m *matcher) wildcard(pos token.Position, next func() fullToken) (fullToken, error) {
 	wt := fullToken{pos, token.IDENT, wildPrefix}
 	t := next()
 	var info varInfo

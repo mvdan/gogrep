@@ -18,8 +18,6 @@ func tokErr(msg string) wantErr   { return wantErr("cannot tokenize expr: " + ms
 func modErr(msg string) wantErr   { return wantErr("cannot parse mods: " + msg) }
 func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) }
 
-type wantSrc string
-
 func TestMatch(t *testing.T) {
 	tests := []struct {
 		args    []string
@@ -670,29 +668,29 @@ func TestMatch(t *testing.T) {
 			"if x { a(); b(); }",
 		},
 		{
-			[]string{"-x", "foo", "-s", "bar"},
+			[]string{"-x", "foo", "-s", "bar", "-w"},
 			`foo(); println("foo"); println(foo, foobar)`,
-			wantSrc(`bar(); println("foo"); println(bar, foobar)`),
+			`bar(); println("foo"); println(bar, foobar)`,
 		},
 		{
-			[]string{"-x", "$f()", "-s", "$f(nil)"},
+			[]string{"-x", "$f()", "-s", "$f(nil)", "-w"},
 			`foo(); bar(); baz(x)`,
-			wantSrc(`foo(nil); bar(nil); baz(x)`),
+			`foo(nil); bar(nil); baz(x)`,
 		},
 		{
-			[]string{"-x", "foo($*_)", "-s", "foo()"},
+			[]string{"-x", "foo($*_)", "-s", "foo()", "-w"},
 			`foo(); foo(a, b); bar(x)`,
-			wantSrc(`foo(); foo(); bar(x)`),
+			`foo(); foo(); bar(x)`,
 		},
 		{
-			[]string{"-x", "a, b", "-s", "c, d"},
+			[]string{"-x", "a, b", "-s", "c, d", "-w"},
 			`foo(); foo(a, b); bar(a, b)`,
-			wantSrc(`foo(); foo(c, d); bar(c, d)`),
+			`foo(); foo(c, d); bar(c, d)`,
 		},
 		{
-			[]string{"-x", "a(); b()", "-s", "c(); d()"},
+			[]string{"-x", "a(); b()", "-s", "c(); d()", "-w"},
 			`{ a(); b(); c(); }; { a(); a(); b(); }`,
-			wantSrc(`{ c(); d(); c(); }; { a(); c(); d(); }`),
+			`{ c(); d(); c(); }; { a(); c(); d(); }`,
 		},
 		{
 			[]string{"-x", "a()", "-s", "c()", "-w"},
@@ -822,16 +820,6 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		}
 		got := singleLinePrint(matches[0])
 		if got != want {
-			terr("wanted %q match, got %q", want, got)
-		}
-	case wantSrc:
-		// TODO: replace with a more robust -w
-		if err != nil {
-			terr("unexpected error: %v", err)
-			return
-		}
-		got := singleLinePrint(srcNode)
-		if got != string(want) {
 			terr("wanted %q match, got %q", want, got)
 		}
 	default:

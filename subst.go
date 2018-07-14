@@ -11,7 +11,8 @@ import (
 )
 
 func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
-	for _, sub := range subs {
+	for i := range subs {
+		sub := &subs[i]
 		nodeCopy, _ := m.parseExpr(cmd.src)
 		// since we'll want to set positions within the file's
 		// FileSet
@@ -105,6 +106,8 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 			panic(fmt.Sprintf("cannot replace stmts with %T", y))
 		}
 		*x = append(*x, last...)
+	case nil:
+		return
 	default:
 		panic(fmt.Sprintf("unsupported substitution: %T", x))
 	}

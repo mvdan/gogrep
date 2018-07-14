@@ -744,6 +744,11 @@ func TestMatch(t *testing.T) {
 			`{ if foo() { bar(); }; etc(); }`,
 			`if foo() { bar(); }`,
 		},
+		{
+			[]string{"-x", "f($*a)", "-s", "f2(x, $a)", "-w"},
+			`f(c, d)`,
+			`f2(x, c, d)`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

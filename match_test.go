@@ -539,13 +539,6 @@ func TestMatch(t *testing.T) {
 		{[]string{"-x", "switch $*_; b {}"}, "switch b := f(); b {}", 1},
 		{[]string{"-x", "switch $*_; b {}"}, "switch b := f(); c {}", 0},
 
-		// $*_ matching optional statements (ifs)
-		{[]string{"-x", "if $*_; b {}"}, "if b {}", 1},
-		{[]string{"-x", "if $*_; b {}"}, "if a := f(); b {}", 1},
-		// TODO: fix
-		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b) }", 1},
-		//{[]string{"-x", "if a(); $*x { f($*x) }"}, "if a(); b { f(b, c) }", 0},
-
 		// inc/dec stmts
 		{[]string{"-x", "$x++"}, "a[b]++", 1},
 		{[]string{"-x", "$x--"}, "a++", 0},

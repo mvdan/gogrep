@@ -6,7 +6,7 @@
 
 Search for Go code using syntax trees. Work in progress.
 
-	gogrep 'if $x != nil { return $x, $*_ }'
+	gogrep -x 'if $x != nil { return $x, $*_ }'
 
 ### Instrucitons
 
@@ -19,8 +19,6 @@ A command is of the form "-A pattern", where -A is one of:
        -v  discard nodes matching a pattern
        -s  substitute with a given syntax tree
        -w  write source back to disk or stdout
-
-If -A is ommitted for a single command, -x will be assumed.
 
 A pattern is a piece of Go code which may include wildcards. It can be:
 

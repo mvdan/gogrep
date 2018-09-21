@@ -17,7 +17,7 @@ A command is of the form "-A pattern", where -A is one of:
        -x  find all nodes matching a pattern
        -g  discard nodes not matching a pattern
        -v  discard nodes matching a pattern
-       -a attribute  discard nodes without an attribute
+       -a  attribute discard nodes without an attribute
        -s  substitute with a given syntax tree
        -w  write source back to disk or stdout
 

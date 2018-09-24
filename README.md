@@ -17,7 +17,7 @@ A command is of the form "-A pattern", where -A is one of:
        -x  find all nodes matching a pattern
        -g  discard nodes not matching a pattern
        -v  discard nodes matching a pattern
-       -a  attribute discard nodes without an attribute
+       -a filter nodes by certain attributes
        -s  substitute with a given syntax tree
        -w  write source back to disk or stdout
 
@@ -51,7 +51,7 @@ Regexes can also be used to match certain identifier names only. The
 The nodes resulting from applying the commands will be printed line by
 line to standard output.
 
-Example of using `-a` argument is filtering matched expressions by type.
+Here are two simple examples of the -a operand:
 
        gogrep -x '$x + $y'                   // will match both numerical and string "+" operations
-       gogrep -x '$x + $y' -a 'type(string)' // matches only concatenations
+       gogrep -x '$x + $y' -a 'type(string)' // matches only string concatenations

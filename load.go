@@ -6,6 +6,7 @@ package main
 import (
 	"go/token"
 	"sort"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -36,7 +37,14 @@ func (l nodeLoader) typed(args []string, recurse bool) ([]*packages.Package, err
 	byPath := make(map[string]*packages.Package)
 	var addDeps func(*packages.Package)
 	addDeps = func(pkg *packages.Package) {
+		if strings.HasSuffix(pkg.PkgPath, ".test") {
+			// don't add recursive test deps
+			return
+		}
 		for _, imp := range pkg.Imports {
+			if _, ok := byPath[imp.PkgPath]; ok {
+				continue // seen; avoid recursive call
+			}
 			byPath[imp.PkgPath] = imp
 			addDeps(imp)
 		}

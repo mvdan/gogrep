@@ -15,7 +15,7 @@ func (m *matcher) load(wd string, args ...string) ([]*packages.Package, error) {
 		Mode:  packages.LoadSyntax,
 		Dir:   wd,
 		Fset:  m.fset,
-		Tests: true,
+		Tests: m.tests,
 	}
 	if m.recursive {
 		// we'll need the syntax trees for the dependencies too

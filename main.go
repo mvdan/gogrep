@@ -24,7 +24,8 @@ var usage = func() {
 
 gogrep performs a query on the given Go packages.
 
-  -r   match all dependencies recursively too
+  -r      search dependencies recursively too
+  -tests  search test files too (and direct test deps, with -r)
 
 A command is one of the following:
 
@@ -74,7 +75,7 @@ type matcher struct {
 
 	parents map[ast.Node]ast.Node
 
-	recursive         bool
+	recursive, tests  bool
 	typed, aggressive bool
 
 	// information about variables (wildcards), by id (which is an
@@ -166,7 +167,8 @@ func (m *matcher) fromArgs(wd string, args []string) error {
 func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
 	flagSet := flag.NewFlagSet("gogrep", flag.ExitOnError)
 	flagSet.Usage = usage
-	flagSet.BoolVar(&m.recursive, "r", false, "match all dependencies recursively too")
+	flagSet.BoolVar(&m.recursive, "r", false, "search dependencies recursively too")
+	flagSet.BoolVar(&m.tests, "tests", false, "search test files too (and direct test deps, with -r)")
 
 	var cmds []exprCmd
 	flagSet.Var(&strCmdFlag{

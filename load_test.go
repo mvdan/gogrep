@@ -78,7 +78,6 @@ func TestLoad(t *testing.T) {
 				p1/file1.go:3:1: var _ = "file1"
 				p1/p2/file1.go:3:1: var _ = "file1"
 				p1/p2/file2.go:3:1: var _ = "file2"
-				p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{

@@ -771,6 +771,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		t.Fatal(srcErr)
 	}
 	f, ok := srcNode.(*ast.File)
+	m.Info = &types.Info{}
 	if m.typed && ok {
 		pkg := types.NewPackage("", "")
 		fset := token.NewFileSet()
@@ -780,7 +781,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 		m.Info.Uses = make(map[*ast.Ident]types.Object)
 		m.Info.Scopes = make(map[ast.Node]*types.Scope)
 		config := &types.Config{Importer: importer.Default()}
-		check := types.NewChecker(config, fset, pkg, &m.Info)
+		check := types.NewChecker(config, fset, pkg, m.Info)
 		if err := check.Files([]*ast.File{f}); err != nil {
 			t.Fatal(err)
 		}

@@ -68,7 +68,7 @@ func f() {
 		m := matcher{ctx: &build.Default}
 		var buf bytes.Buffer
 		m.out = &buf
-		if err := m.fromArgs(args); err != nil {
+		if err := m.fromArgs(".", args); err != nil {
 			t.Fatalf("didn't want error, but got %q", err)
 		}
 		gotOut := buf.String()

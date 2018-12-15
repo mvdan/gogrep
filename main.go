@@ -15,7 +15,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -60,7 +59,7 @@ func main() {
 		out: os.Stdout,
 		ctx: &build.Default,
 	}
-	err := m.fromArgs(os.Args[1:])
+	err := m.fromArgs(".", os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -87,7 +86,7 @@ type matcher struct {
 	values map[string]ast.Node
 	scope  *types.Scope
 
-	types.Info
+	*types.Info
 	stdImporter types.Importer
 }
 
@@ -135,33 +134,25 @@ func (o *boolCmdFlag) Set(val string) error {
 }
 func (o *boolCmdFlag) IsBoolFlag() bool { return true }
 
-func (m *matcher) fromArgs(args []string) error {
+func (m *matcher) fromArgs(wd string, args []string) error {
 	cmds, paths, err := m.parseCmds(args)
 	if err != nil {
 		return err
 	}
 	fset := token.NewFileSet()
-	wd, err := os.Getwd()
+	m.loader = nodeLoader{wd, fset}
+	pkgs, err := m.loader.typed(paths, m.recursive)
 	if err != nil {
 		return err
 	}
-	m.loader = nodeLoader{wd, m.ctx, fset}
-	var pkgs []loadPkg
-	if !m.typed {
-		pkgs, err = m.loader.untyped(paths, m.recursive)
-	} else {
-		pkgs, err = m.loader.typed(paths, m.recursive)
-	}
-	if err != nil {
-		return err
-	}
-	sort.Slice(pkgs, func(i, j int) bool {
-		return pkgs[i].path < pkgs[j].path
-	})
 	var all []ast.Node
 	for _, pkg := range pkgs {
-		m.Info = pkg.info
-		all = append(all, m.matches(cmds, pkg.nodes)...)
+		m.Info = pkg.TypesInfo
+		nodes := make([]ast.Node, len(pkg.Syntax))
+		for i, f := range pkg.Syntax {
+			nodes[i] = f
+		}
+		all = append(all, m.matches(cmds, nodes)...)
 	}
 	for _, n := range all {
 		fpos := m.loader.fset.Position(n.Pos())

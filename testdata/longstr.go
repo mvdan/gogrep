@@ -1,4 +1,4 @@
-package p1
+package util
 
 var _ = `single line`
 var _ = `some

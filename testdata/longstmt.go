@@ -1,4 +1,4 @@
-package p1
+package util
 
 func _() {
 	if true {

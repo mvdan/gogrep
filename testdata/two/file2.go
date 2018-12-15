@@ -1,3 +1,3 @@
-package p2
+package two
 
 var _ = "file2"

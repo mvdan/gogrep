@@ -1,4 +1,2 @@
-github.com/kisielk/gotool v1.0.0 h1:AV2c/EiW3KqPNT9ZKl07ehoAGi4C5/01Cfbblndcapg=
-github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
-golang.org/x/tools v0.0.0-20180831211245-7ca132754999 h1:mf2VYfMpSMTlp0I/UXrX13w5LejDx34QeUUHH4TrUA8=
-golang.org/x/tools v0.0.0-20180831211245-7ca132754999/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=
+golang.org/x/tools v0.0.0-20181214171254-3c39ce7b6105 h1:kFsnkWrmuEx8NF7fFPXVUvSHzRcmD/9TevF5wNmXizs=
+golang.org/x/tools v0.0.0-20181214171254-3c39ce7b6105/go.mod h1:n7NCudcB/nEzxVGmLbDWY5pfWTLqBcC2KZ6jyYvM4mQ=

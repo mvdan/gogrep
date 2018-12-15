@@ -4,146 +4,56 @@
 package main
 
 import (
-	"go/ast"
-	"go/build"
-	"go/parser"
 	"go/token"
-	"go/types"
-	"path/filepath"
-	"strings"
+	"sort"
 
-	"github.com/kisielk/gotool"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 type nodeLoader struct {
 	wd   string
-	ctx  *build.Context
 	fset *token.FileSet
 }
 
-type loadPkg struct {
-	path  string
-	nodes []ast.Node
-	info  types.Info
-}
-
-func (l nodeLoader) untyped(args []string, recurse bool) ([]loadPkg, error) {
-	gctx := gotool.Context{BuildContext: *l.ctx}
-	paths := gctx.ImportPaths(args)
-	var pkgs []loadPkg
-	var cur loadPkg
-	addFile := func(path string) error {
-		f, err := parser.ParseFile(l.fset, path, nil, parser.ParseComments)
-		if err != nil {
-			return err
-		}
-		cur.nodes = append(cur.nodes, f)
-		return nil
+func (l nodeLoader) typed(args []string, recurse bool) ([]*packages.Package, error) {
+	cfg := &packages.Config{
+		Mode:  packages.LoadSyntax,
+		Dir:   l.wd,
+		Fset:  l.fset,
+		Tests: true,
 	}
-	done := map[string]bool{}
-	var addPkg func(path string, direct bool) error // to recurse into self
-	addPkg = func(path string, direct bool) error {
-		if done[path] {
-			return nil
-		}
-		done[path] = true
-		if len(cur.nodes) > 0 {
-			pkgs = append(pkgs, cur)
-			cur = loadPkg{path: path}
-		}
-		pkg, err := l.ctx.Import(path, l.wd, 0)
-		if err != nil {
-			return err
-		}
-		for _, names := range [...][]string{
-			pkg.GoFiles, pkg.CgoFiles, pkg.IgnoredGoFiles,
-			pkg.TestGoFiles, pkg.XTestGoFiles,
-		} {
-			for _, name := range names {
-				path := filepath.Join(pkg.Dir, name)
-				if err := addFile(path); err != nil {
-					return err
-				}
-			}
-		}
-		if !recurse {
-			return nil
-		}
-		imports := pkg.Imports
-		if direct {
-			imports = append(imports, pkg.TestImports...)
-			imports = append(imports, pkg.XTestImports...)
-		}
-		for _, path := range imports {
-			if err := addPkg(path, false); err != nil {
-				return err
-			}
-		}
-		return nil
+	if recurse {
+		// we'll need the syntax trees for the dependencies too
+		cfg.Mode = packages.LoadAllSyntax
 	}
-	for _, path := range paths {
-		if strings.HasSuffix(path, ".go") {
-			if err := addFile(path); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if err := addPkg(path, true); err != nil {
-			return nil, err
-		}
-	}
-	if len(cur.nodes) > 0 {
-		pkgs = append(pkgs, cur)
-	}
-	return pkgs, nil
-}
-
-func (l nodeLoader) typed(args []string, recurse bool) ([]loadPkg, error) {
-	gctx := gotool.Context{BuildContext: *l.ctx}
-	paths := gctx.ImportPaths(args)
-	conf := loader.Config{Fset: l.fset, Cwd: l.wd, Build: l.ctx}
-	if _, err := conf.FromArgs(paths, true); err != nil {
-		return nil, err
-	}
-	var terr error
-	conf.TypeChecker.Error = func(err error) {
-		if terr == nil {
-			terr = err
-		}
-	}
-	prog, err := conf.Load()
+	pkgs, err := packages.Load(cfg, args...)
 	if err != nil {
-		if terr != nil {
-			return nil, terr
-		}
 		return nil, err
 	}
-	var pkgs []loadPkg
-	done := map[string]bool{}
-	var addPkg func(tpkg *types.Package) // to recurse into self
-	addPkg = func(tpkg *types.Package) {
-		path := tpkg.Path()
-		if done[path] {
-			return
-		}
-		done[path] = true
-		pkg := prog.Package(path)
-		lpkg := loadPkg{path: path, info: pkg.Info}
-		for _, file := range pkg.Files {
-			lpkg.nodes = append(lpkg.nodes, file)
-		}
-		pkgs = append(pkgs, lpkg)
-		if !recurse {
-			return
-		}
-		// TODO: differentiate direct imports like in untyped?
-		for _, ipkg := range tpkg.Imports() {
-			addPkg(ipkg)
+
+	// Make a sorted list of the packages, including transitive dependencies
+	// if recurse is true.
+	byPath := make(map[string]*packages.Package)
+	var addDeps func(*packages.Package)
+	addDeps = func(pkg *packages.Package) {
+		for _, imp := range pkg.Imports {
+			byPath[imp.PkgPath] = imp
+			addDeps(imp)
 		}
 	}
-	for _, pkg := range prog.InitialPackages() {
-		addPkg(pkg.Pkg)
+	for _, pkg := range pkgs {
+		byPath[pkg.PkgPath] = pkg
+		if recurse {
+			// add all dependencies once
+			addDeps(pkg)
+		}
 	}
+	pkgs = pkgs[:0]
+	for _, pkg := range byPath {
+		pkgs = append(pkgs, pkg)
+	}
+	sort.Slice(pkgs, func(i, j int) bool {
+		return pkgs[i].PkgPath < pkgs[j].PkgPath
+	})
 	return pkgs, nil
 }

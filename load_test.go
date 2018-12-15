@@ -7,116 +7,101 @@ import (
 	"bytes"
 	"fmt"
 	"go/build"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoad(t *testing.T) {
 	ctx := build.Default
-	ctx.GOPATH = "testdata"
+	baseDir, err := filepath.Abs("testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
 	m := matcher{ctx: &ctx}
 	tests := []struct {
 		args []string
 		want interface{}
 	}{
 		{
-			[]string{"-x", "var _ = $x", "testdata/two/file1.go", "testdata/two/file2.go"},
+			[]string{"-x", "var _ = $x", "two/file1.go", "two/file2.go"},
 			`
-				testdata/two/file1.go:3:1: var _ = "file1"
-				testdata/two/file2.go:3:1: var _ = "file2"
+				two/file1.go:3:1: var _ = "file1"
+				two/file2.go:3:1: var _ = "file2"
 			`,
 		},
+		// TODO(mvdan): reenable once
+		// https://github.com/golang/go/issues/29280 is fixed
+		// {
+		// 	[]string{"-x", "var _ = $x", "noexist.go"},
+		// 	fmt.Errorf("packages not found"),
+		// },
+		// {
+		// 	[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "noexist.go"},
+		// 	fmt.Errorf("packages not found"),
+		// },
 		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "testdata/two/file1.go", "testdata/two/file2.go"},
-			fmt.Errorf("package p2; expected p1"),
+			[]string{"-x", "var _ = $x", "./p1"},
+			`p1/file1.go:3:1: var _ = "file1"`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "noexist.go"},
-			fmt.Errorf("no such file or directory"),
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "./p1"},
+			`p1/file1.go:3:1: var _ = "file1"`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "noexist.go"},
-			fmt.Errorf("no such file or directory"),
-		},
-		{
-			[]string{"-x", "var _ = $x", "./testdata/two"},
-			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
-		},
-		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "./testdata/two"},
-			fmt.Errorf("packages p1 (file1.go) and p2 (file2.go)"),
-		},
-		{
-			[]string{"-x", "var _ = $x", "p1"},
-			`testdata/src/p1/file1.go:3:1: var _ = "file1"`,
-		},
-		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "p1"},
-			`testdata/src/p1/file1.go:3:1: var _ = "file1"`,
-		},
-		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(int)", "p1"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(int)", "./p1"},
 			``, // different type
 		},
 		{
-			[]string{"-x", "var _ = $x", "p1/..."},
+			[]string{"-x", "var _ = $x", "./p1/..."},
 			`
-				testdata/src/p1/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
-				testdata/src/p1/p3/testp/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+				p1/file1.go:3:1: var _ = "file1"
+				p1/p2/file1.go:3:1: var _ = "file1"
+				p1/p2/file2.go:3:1: var _ = "file2"
+				p1/p3/testp/file1.go:3:1: var _ = "file1"
+				p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "p1/..."},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "./p1/..."},
 			`
-				testdata/src/p1/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
-				testdata/src/p1/p3/testp/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+				p1/file1.go:3:1: var _ = "file1"
+				p1/p2/file1.go:3:1: var _ = "file1"
+				p1/p2/file2.go:3:1: var _ = "file2"
+				p1/p3/testp/file1.go:3:1: var _ = "file1"
+				p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "-r", "p1"},
+			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "-r", "./p1"},
 			`
-				testdata/src/p1/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
-				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+				p1/file1.go:3:1: var _ = "file1"
+				p1/p2/file1.go:3:1: var _ = "file1"
+				p1/p2/file2.go:3:1: var _ = "file2"
+				p1/testp/file1.go:3:1: var _ = "file1"
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(string)", "-p", "2", "-r", "p1"},
+			[]string{"-x", "var _ = $x", "longstr.go"},
 			`
-				testdata/src/p1/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file1.go:3:1: var _ = "file1"
-				testdata/src/p1/p2/file2.go:3:1: var _ = "file2"
-				testdata/src/p1/testp/file1.go:3:1: var _ = "file1"
+				longstr.go:3:1: var _ = ` + "`single line`" + `
+				longstr.go:4:1: var _ = "some\nmultiline\nstring"
 			`,
 		},
 		{
-			[]string{"-x", "var _ = $x", "testdata/longstr.go"},
-			`
-				testdata/longstr.go:3:1: var _ = ` + "`single line`" + `
-				testdata/longstr.go:4:1: var _ = "some\nmultiline\nstring"
-			`,
+			[]string{"-x", "if $_ { $*_ }", "longstmt.go"},
+			`longstmt.go:4:2: if true { foo(); bar(); }`,
 		},
 		{
-			[]string{"-x", "if $_ { $*_ }", "testdata/longstmt.go"},
-			`testdata/longstmt.go:4:2: if true { foo(); bar(); }`,
-		},
-		{
-			[]string{"-x", "1, 2, 3, 4, 5", "testdata/exprlist.go"},
-			`testdata/exprlist.go:3:13: 1, 2, 3, 4, 5`,
+			[]string{"-x", "1, 2, 3, 4, 5", "exprlist.go"},
+			`exprlist.go:3:13: 1, 2, 3, 4, 5`,
 		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%02d", i), func(t *testing.T) {
 			var buf bytes.Buffer
 			m.out = &buf
-			err := m.fromArgs(tc.args)
+			err := m.fromArgs(baseDir, tc.args)
 			switch x := tc.want.(type) {
 			case error:
 				if err == nil {

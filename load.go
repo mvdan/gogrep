@@ -4,26 +4,20 @@
 package main
 
 import (
-	"go/token"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
-type nodeLoader struct {
-	wd   string
-	fset *token.FileSet
-}
-
-func (l nodeLoader) typed(args []string, recurse bool) ([]*packages.Package, error) {
+func (m *matcher) load(wd string, args ...string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode:  packages.LoadSyntax,
-		Dir:   l.wd,
-		Fset:  l.fset,
+		Dir:   wd,
+		Fset:  m.fset,
 		Tests: true,
 	}
-	if recurse {
+	if m.recursive {
 		// we'll need the syntax trees for the dependencies too
 		cfg.Mode = packages.LoadAllSyntax
 	}
@@ -51,7 +45,7 @@ func (l nodeLoader) typed(args []string, recurse bool) ([]*packages.Package, err
 	}
 	for _, pkg := range pkgs {
 		byPath[pkg.PkgPath] = pkg
-		if recurse {
+		if m.recursive {
 			// add all dependencies once
 			addDeps(pkg)
 		}

@@ -70,7 +70,7 @@ type matcher struct {
 	out io.Writer
 	ctx *build.Context
 
-	loader nodeLoader
+	fset *token.FileSet
 
 	parents map[ast.Node]ast.Node
 
@@ -135,13 +135,12 @@ func (o *boolCmdFlag) Set(val string) error {
 func (o *boolCmdFlag) IsBoolFlag() bool { return true }
 
 func (m *matcher) fromArgs(wd string, args []string) error {
-	cmds, paths, err := m.parseCmds(args)
+	cmds, args, err := m.parseCmds(args)
 	if err != nil {
 		return err
 	}
-	fset := token.NewFileSet()
-	m.loader = nodeLoader{wd, fset}
-	pkgs, err := m.loader.typed(paths, m.recursive)
+	m.fset = token.NewFileSet()
+	pkgs, err := m.load(wd, args...)
 	if err != nil {
 		return err
 	}
@@ -155,7 +154,7 @@ func (m *matcher) fromArgs(wd string, args []string) error {
 		all = append(all, m.matches(cmds, nodes)...)
 	}
 	for _, n := range all {
-		fpos := m.loader.fset.Position(n.Pos())
+		fpos := m.fset.Position(n.Pos())
 		if strings.HasPrefix(fpos.Filename, wd) {
 			fpos.Filename = fpos.Filename[len(wd)+1:]
 		}

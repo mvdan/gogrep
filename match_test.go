@@ -786,7 +786,7 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 			t.Fatal(err)
 		}
 	}
-	m.loader.fset = emptyFset
+	m.fset = emptyFset
 	matches := m.matches(cmds, []ast.Node{srcNode})
 	switch want := anyWant.(type) {
 	case wantErr:

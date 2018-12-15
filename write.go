@@ -22,7 +22,7 @@ func (m *matcher) cmdWrite(cmd exprCmd, subs []submatch) []submatch {
 		seenRoot[hash] = true
 		file, ok := root.(*ast.File)
 		if ok {
-			path := m.loader.fset.Position(file.Package).Filename
+			path := m.fset.Position(file.Package).Filename
 			if path != "" {
 				// write to disk
 				filePaths[file] = path
@@ -38,7 +38,7 @@ func (m *matcher) cmdWrite(cmd exprCmd, subs []submatch) []submatch {
 			// TODO: return errors instead
 			panic(err)
 		}
-		if err := printConfig.Fprint(f, m.loader.fset, file); err != nil {
+		if err := printConfig.Fprint(f, m.fset, file); err != nil {
 			// TODO: return errors instead
 			panic(err)
 		}

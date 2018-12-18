@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -24,6 +25,15 @@ func (m *matcher) load(wd string, args ...string) ([]*packages.Package, error) {
 	pkgs, err := packages.Load(cfg, args...)
 	if err != nil {
 		return nil, err
+	}
+	jointErr := ""
+	packages.Visit(pkgs, nil, func(pkg *packages.Package) {
+		for _, err := range pkg.Errors {
+			jointErr += err.Error() + "\n"
+		}
+	})
+	if jointErr != "" {
+		return nil, fmt.Errorf("%s", jointErr)
 	}
 
 	// Make a sorted list of the packages, including transitive dependencies

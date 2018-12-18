@@ -20,17 +20,18 @@ func TestWriteFiles(t *testing.T) {
 	}
 	files := []struct{ orig, want string }{
 		{
-			"package p\n\nfunc f() { foo() }\n",
-			"package p\n\nfunc f() { bar() }\n",
+			// TODO: "func foo()" should get changed too
+			"package p\n\nfunc foo()\nfunc bar()\nfunc f1() { foo() }\n",
+			"package p\n\nfunc foo()\nfunc bar()\nfunc f1() { bar() }\n",
 		},
 		{
-			"// package p doc\npackage p\n\nfunc f() { foo() }\n",
-			"// package p doc\npackage p\n\nfunc f() { bar() }\n",
+			"// package p doc\npackage p\n\nfunc f2() { foo() }\n",
+			"// package p doc\npackage p\n\nfunc f2() { bar() }\n",
 		},
 		{
 			`package p
-
-func f() {
+func fn(int)
+func f3() {
 	go func() {
 		// comment
 		fn(0)
@@ -39,7 +40,8 @@ func f() {
 `,
 			`package p
 
-func f() {
+func fn(int)
+func f3() {
 
 	// comment
 	go fn(0)

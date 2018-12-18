@@ -89,11 +89,11 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			[]string{"-x", "if $_ { $*_ }", "longstmt.go"},
-			`longstmt.go:4:2: if true { foo(); bar(); }`,
+			`longstmt.go:7:2: if true { foo(); bar(); }`,
 		},
 		{
 			[]string{"-x", "1, 2, 3, 4, 5", "exprlist.go"},
-			`exprlist.go:3:13: 1, 2, 3, 4, 5`,
+			`exprlist.go:5:13: 1, 2, 3, 4, 5`,
 		},
 	}
 	for i, tc := range tests {

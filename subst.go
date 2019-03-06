@@ -36,7 +36,16 @@ func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
 		prev := values[info.name]
 		switch prev.(type) {
 		case exprList:
-			node = exprList([]ast.Expr{node.(*ast.Ident)})
+			node = exprList([]ast.Expr{
+				node.(*ast.Ident),
+			})
+		case stmtList:
+			if ident, ok := node.(*ast.Ident); ok {
+				node = &ast.ExprStmt{X: ident}
+			}
+			node = stmtList([]ast.Stmt{
+				node.(*ast.ExprStmt),
+			})
 		}
 		m.substNode(node, prev)
 		return true

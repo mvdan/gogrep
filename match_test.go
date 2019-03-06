@@ -740,6 +740,11 @@ func TestMatch(t *testing.T) {
 			`f(c, d)`,
 			`f2(x, c, d)`,
 		},
+		{
+			[]string{"-x", "err = f(); if err != nil { $*then }", "-s", "if err := f(); err != nil { $then }", "-w"},
+			`{ err = f(); if err != nil { handle(err); }; }`,
+			`{ if err := f(); err != nil { handle(err); }; }`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

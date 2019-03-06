@@ -457,6 +457,8 @@ func TestMatch(t *testing.T) {
 			[]string{"-x", "func $_($x $y) $y { return $x }"},
 			"func a(i int) int { return i }", 1,
 		},
+		{[]string{"-x", "func $x(i int)"}, "func a(i int)", 1},
+		{[]string{"-x", "func $x(i int) {}"}, "func a(i int)", 0},
 
 		// value specs
 		{[]string{"-x", "$_ int"}, "var a int", 1},

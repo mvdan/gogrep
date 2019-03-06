@@ -510,7 +510,13 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return true
 		}
 		y, ok := node.(*ast.BlockStmt)
-		return ok && (m.cases(x.List, y.List) || m.stmts(x.List, y.List))
+		if !ok {
+			return false
+		}
+		if x == nil || y == nil {
+			return x == y
+		}
+		return m.cases(x.List, y.List) || m.stmts(x.List, y.List)
 	case *ast.IfStmt:
 		y, ok := node.(*ast.IfStmt)
 		if !ok {

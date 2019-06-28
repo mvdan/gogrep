@@ -19,14 +19,27 @@ func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
 		scrubPositions(nodeCopy)
 
 		m.fillParents(nodeCopy)
-		m.fillValues(nodeCopy, sub.values)
+		nodeCopy = m.fillValues(nodeCopy, sub.values)
 		m.substNode(sub.node, nodeCopy)
 		sub.node = nodeCopy
 	}
 	return subs
 }
 
-func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
+type topNode struct {
+	Node ast.Node
+}
+
+func (t topNode) Pos() token.Pos { return t.Node.Pos() }
+func (t topNode) End() token.Pos { return t.Node.End() }
+
+func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) ast.Node {
+	// node might not have a parent, in which case we need to set an
+	// artificial one. Its pointer interface is a copy, so we must also
+	// return it.
+	top := &topNode{node}
+	m.setParentOf(node, top)
+
 	inspect(node, func(node ast.Node) bool {
 		id := fromWildNode(node)
 		info := m.info(id)
@@ -50,6 +63,8 @@ func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) {
 		m.substNode(node, prev)
 		return true
 	})
+	m.setParentOf(node, nil)
+	return top.Node
 }
 
 func (m *matcher) substNode(oldNode, newNode ast.Node) {
@@ -60,6 +75,8 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	switch x := ptr.(type) {
 	case **ast.Ident:
 		*x = newNode.(*ast.Ident)
+	case *ast.Node:
+		*x = newNode
 	case *ast.Expr:
 		*x = newNode.(ast.Expr)
 	case *ast.Stmt:
@@ -213,6 +230,9 @@ func scrubPositions(node ast.Node) {
 }
 
 func fixPositions(node ast.Node) {
+	if top, ok := node.(*topNode); ok {
+		node = top.Node
+	}
 	fallback := func(pos *token.Pos, to token.Pos) {
 		if !pos.IsValid() {
 			*pos = to

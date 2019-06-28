@@ -747,6 +747,11 @@ func TestMatch(t *testing.T) {
 			`{ err = f(); if err != nil { handle(err); }; }`,
 			`{ if err := f(); err != nil { handle(err); }; }`,
 		},
+		{
+			[]string{"-x", "List{$e}", "-s", "$e", "-w"},
+			`List{foo()}`,
+			`foo()`,
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {

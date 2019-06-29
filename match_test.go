@@ -134,35 +134,35 @@ func TestMatch(t *testing.T) {
 		// type equality
 		{
 			[]string{"-x", "$x", "-a", "type(int)"},
-			"package p; var i int", 2, // includes "int" the type
+			"var i int", 2, // includes "int" the type
 		},
 		{
 			[]string{"-x", "append($x)", "-x", "$x", "-a", "type([]int)"},
-			"package p; var _ = append([]int32{3})", 0,
+			"var _ = append([]int32{3})", 0,
 		},
 		{
 			[]string{"-x", "append($x)", "-x", "$x", "-a", "type([]int)"},
-			"package p; var _ = append([]int{3})", 1,
+			"var _ = append([]int{3})", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
-			"package p; var _ = [...]int{1}", 0,
+			"var _ = [...]int{1}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
-			"package p; var _ = [...]int{1, 2}", 1,
+			"var _ = [...]int{1, 2}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type([2]int)"},
-			"package p; var _ = []int{1, 2}", 0,
+			"var _ = []int{1, 2}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(*int)"},
-			"package p; var _ = int(3)", 0,
+			"var _ = int(3)", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(*int)"},
-			"package p; var _ = new(int)", 1,
+			"var _ = new(int)", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(io.Reader)"},
@@ -184,7 +184,7 @@ func TestMatch(t *testing.T) {
 		// type assignability
 		{
 			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "type(int)"},
-			"package p; const _ = 3", 0,
+			"const _ = 3", 0,
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(io.Reader)"},
@@ -200,29 +200,29 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
-			`package p; var _ interface{} = 0`, 0,
+			`var _ interface{} = 0`, 0,
 		},
 		{
 			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
-			`package p; var _ interface{} = nil`, 1,
+			`var _ interface{} = nil`, 1,
 		},
 
 		// type conversions
 		{
 			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "type(int)"},
-			"package p; const _ = 3", 0,
+			"const _ = 3", 0,
 		},
 		{
 			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv(int)"},
-			"package p; const _ = 3", 1,
+			"const _ = 3", 1,
 		},
 		{
 			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv(int32)"},
-			"package p; const _ = 3", 1,
+			"const _ = 3", 1,
 		},
 		{
 			[]string{"-x", "const _ = $x", "-x", "$x", "-a", "conv([]byte)"},
-			"package p; const _ = 3", 0,
+			"const _ = 3", 0,
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(int)"},
@@ -236,17 +236,17 @@ func TestMatch(t *testing.T) {
 		// comparable types
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "comp"},
-			"package p; var _ = []byte{0}", 0,
+			"var _ = []byte{0}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "comp"},
-			"package p; var _ = [...]byte{0}", 1,
+			"var _ = [...]byte{0}", 1,
 		},
 
 		// addressable expressions
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "addr"},
-			"package p; var _ = []byte{0}", 0,
+			"var _ = []byte{0}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "addr"},
@@ -256,11 +256,11 @@ func TestMatch(t *testing.T) {
 		// underlying types
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
-			"package p; var _ = 3", 1,
+			"var _ = 3", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
@@ -268,67 +268,67 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(array)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(array)"},
-			"package p; var _ = [...]byte{}", 1,
+			"var _ = [...]byte{}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(slice)"},
-			"package p; var _ = []byte{}", 1,
+			"var _ = []byte{}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(slice)"},
-			"package p; var _ = [...]byte{}", 0,
+			"var _ = [...]byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(struct)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(struct)"},
-			"package p; var _ = struct{}{}", 1,
+			"var _ = struct{}{}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(interface)"},
-			"package p; var _ = struct{}{}", 0,
+			"var _ = struct{}{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(interface)"},
-			"package p; var _ = interface{}(nil)", 1,
+			"var _ = interface{}(nil)", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(pointer)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(pointer)"},
-			"package p; var _ = new(byte)", 1,
+			"var _ = new(byte)", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(func)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(func)"},
-			"package p; var _ = func() {}", 1,
+			"var _ = func() {}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(map)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(map)"},
-			"package p; var _ = map[int]int{}", 1,
+			"var _ = map[int]int{}", 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(chan)"},
-			"package p; var _ = []byte{}", 0,
+			"var _ = []byte{}", 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(chan)"},
-			"package p; var _ = make(chan int)", 1,
+			"var _ = make(chan int)", 1,
 		},
 
 		// many value expressions
@@ -800,24 +800,27 @@ func grepTest(t *testing.T, args []string, src string, want interface{}) {
 	if len(paths) > 0 {
 		t.Fatalf("non-zero paths: %v", paths)
 	}
-	srcNode, srcErr := parseDetectingNode(m.fset, src)
+	srcNode, file, srcErr := parseDetectingNode(m.fset, src)
 	if srcErr != nil {
 		t.Fatal(srcErr)
 	}
-	f, ok := srcNode.(*ast.File)
-	m.Info = &types.Info{}
-	if m.typed && ok {
-		pkg := types.NewPackage("", "")
-		m.Info.Types = make(map[ast.Expr]types.TypeAndValue)
-		m.Info.Defs = make(map[*ast.Ident]types.Object)
-		m.Info.Uses = make(map[*ast.Ident]types.Object)
-		m.Info.Scopes = make(map[ast.Node]*types.Scope)
-		config := &types.Config{Importer: importer.Default()}
-		check := types.NewChecker(config, m.fset, pkg, m.Info)
-		if err := check.Files([]*ast.File{f}); err != nil {
-			t.Fatal(err)
-		}
+
+	// Type-checking is attempted on a best-effort basis.
+	m.Info = &types.Info{
+		Types:  make(map[ast.Expr]types.TypeAndValue),
+		Defs:   make(map[*ast.Ident]types.Object),
+		Uses:   make(map[*ast.Ident]types.Object),
+		Scopes: make(map[ast.Node]*types.Scope),
 	}
+	pkg := types.NewPackage("", "")
+	config := &types.Config{
+		Importer: importer.Default(),
+		Error:    func(error) {}, // don't stop at the first error
+	}
+	check := types.NewChecker(config, m.fset, pkg, m.Info)
+	_ = check.Files([]*ast.File{file})
+	m.scope = pkg.Scope()
+
 	matches := m.matches(cmds, []ast.Node{srcNode})
 	if want, ok := want.(wantErr); ok {
 		if err == nil {

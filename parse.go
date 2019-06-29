@@ -65,7 +65,7 @@ func (m *matcher) parseExpr(expr string) (ast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, err := parseDetectingNode(m.fset, exprStr)
+	node, _, err := parseDetectingNode(m.fset, exprStr)
 	if err != nil {
 		err = subPosOffsets(err, offs...)
 		return nil, fmt.Errorf("cannot parse expr: %v", err)
@@ -129,25 +129,29 @@ func noBadNodes(node ast.Node) bool {
 	return !any
 }
 
-func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
+// parseDetectingNode tries its best to parse the ast.Node contained in src, as
+// one of: *ast.File, ast.Decl, ast.Expr, ast.Stmt, *ast.ValueSpec.
+// It also returns the *ast.File used for the parsing, so that the returned node
+// can be easily type-checked.
+func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, *ast.File, error) {
 	file := fset.AddFile("", fset.Base(), len(src))
 	scan := scanner.Scanner{}
 	scan.Init(file, []byte(src), nil, 0)
 	if _, tok, _ := scan.Scan(); tok == token.EOF {
-		return nil, fmt.Errorf("empty source code")
+		return nil, nil, fmt.Errorf("empty source code")
 	}
 	var mainErr error
 
 	// first try as a whole file
 	if f, err := parser.ParseFile(fset, "", src, 0); err == nil && noBadNodes(f) {
-		return f, nil
+		return f, f, nil
 	}
 
 	// then as a declaration
 	asDecl := execTmpl(tmplDecl, src)
 	if f, err := parser.ParseFile(fset, "", asDecl, 0); err == nil {
 		if dc := f.Decls[0]; noBadNodes(dc) {
-			return dc, nil
+			return dc, f, nil
 		}
 	}
 
@@ -157,9 +161,9 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
 		if cl := vs.Values[0].(*ast.CompositeLit); noBadNodes(cl) {
 			if len(cl.Elts) == 1 {
-				return cl.Elts[0], nil
+				return cl.Elts[0], f, nil
 			}
-			return exprList(cl.Elts), nil
+			return exprList(cl.Elts), f, nil
 		}
 	}
 
@@ -168,9 +172,9 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
 	if f, err := parser.ParseFile(fset, "", asStmts, 0); err == nil {
 		if bl := f.Decls[0].(*ast.FuncDecl).Body; noBadNodes(bl) {
 			if len(bl.List) == 1 {
-				return bl.List[0], nil
+				return bl.List[0], f, nil
 			}
-			return stmtList(bl.List), nil
+			return stmtList(bl.List), f, nil
 		}
 	} else {
 		// Statements is what covers most cases, so it will give
@@ -185,7 +189,7 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
 	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
 		if typ := vs.Type; noBadNodes(typ) {
-			return typ, nil
+			return typ, f, nil
 		}
 	}
 
@@ -194,10 +198,10 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
 	if f, err := parser.ParseFile(fset, "", asValSpec, 0); err == nil {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
 		if noBadNodes(vs) {
-			return vs, nil
+			return vs, f, nil
 		}
 	}
-	return nil, mainErr
+	return nil, nil, mainErr
 }
 
 type posOffset struct {
@@ -245,7 +249,6 @@ const (
 )
 
 func (m *matcher) tokenize(src []byte) ([]fullToken, error) {
-	m.typed = false
 	var s scanner.Scanner
 	fset := token.NewFileSet()
 	file := fset.AddFile("", fset.Base(), len(src))
@@ -355,7 +358,6 @@ func (m *matcher) parseAttrs(src string) (attribute, error) {
 	op := t.lit
 	switch op { // the ones that don't take args
 	case "comp", "addr":
-		m.typed = true
 		if t = next(); t.tok != token.SEMICOLON {
 			return nil, fmt.Errorf("%v: wanted EOF, got %v", t.pos, t.tok)
 		}
@@ -404,7 +406,6 @@ func (m *matcher) parseAttrs(src string) (attribute, error) {
 			return nil, err
 		}
 		attr = typeCheck{op, typeExpr}
-		m.typed = true
 		i -= 2 // since we went past RPAREN above
 	case "is":
 		switch t = next(); t.lit {
@@ -415,7 +416,6 @@ func (m *matcher) parseAttrs(src string) (attribute, error) {
 				t.lit)
 		}
 		attr = typUnderlying(t.lit)
-		m.typed = true
 	default:
 		return nil, fmt.Errorf("%v: unknown op %q", opPos, op)
 	}

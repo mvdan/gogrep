@@ -75,8 +75,8 @@ type matcher struct {
 
 	parents map[ast.Node]ast.Node
 
-	recursive, tests  bool
-	typed, aggressive bool
+	recursive, tests bool
+	aggressive       bool
 
 	// information about variables (wildcards), by id (which is an
 	// integer starting at 0)

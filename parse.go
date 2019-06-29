@@ -147,35 +147,34 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, *ast.File, e
 		return f, f, nil
 	}
 
-	// then as a declaration
+	// then as a single declaration, or many
 	asDecl := execTmpl(tmplDecl, src)
-	if f, err := parser.ParseFile(fset, "", asDecl, 0); err == nil {
-		if dc := f.Decls[0]; noBadNodes(dc) {
-			return dc, f, nil
+	if f, err := parser.ParseFile(fset, "", asDecl, 0); err == nil && noBadNodes(f) {
+		if len(f.Decls) == 1 {
+			return f.Decls[0], f, nil
 		}
+		return f, f, nil
 	}
 
 	// then as value expressions
 	asExprs := execTmpl(tmplExprs, src)
-	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil {
+	if f, err := parser.ParseFile(fset, "", asExprs, 0); err == nil && noBadNodes(f) {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-		if cl := vs.Values[0].(*ast.CompositeLit); noBadNodes(cl) {
-			if len(cl.Elts) == 1 {
-				return cl.Elts[0], f, nil
-			}
-			return exprList(cl.Elts), f, nil
+		cl := vs.Values[0].(*ast.CompositeLit)
+		if len(cl.Elts) == 1 {
+			return cl.Elts[0], f, nil
 		}
+		return exprList(cl.Elts), f, nil
 	}
 
 	// then try as statements
 	asStmts := execTmpl(tmplStmts, src)
-	if f, err := parser.ParseFile(fset, "", asStmts, 0); err == nil {
-		if bl := f.Decls[0].(*ast.FuncDecl).Body; noBadNodes(bl) {
-			if len(bl.List) == 1 {
-				return bl.List[0], f, nil
-			}
-			return stmtList(bl.List), f, nil
+	if f, err := parser.ParseFile(fset, "", asStmts, 0); err == nil && noBadNodes(f) {
+		bl := f.Decls[0].(*ast.FuncDecl).Body
+		if len(bl.List) == 1 {
+			return bl.List[0], f, nil
 		}
+		return stmtList(bl.List), f, nil
 	} else {
 		// Statements is what covers most cases, so it will give
 		// the best overall error message. Show positions
@@ -186,20 +185,16 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, *ast.File, e
 
 	// type expressions not yet picked up, for e.g. chans and interfaces
 	asType := execTmpl(tmplType, src)
-	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil {
+	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil && noBadNodes(f) {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-		if typ := vs.Type; noBadNodes(typ) {
-			return typ, f, nil
-		}
+		return vs.Type, f, nil
 	}
 
 	// value specs
 	asValSpec := execTmpl(tmplValSpec, src)
-	if f, err := parser.ParseFile(fset, "", asValSpec, 0); err == nil {
+	if f, err := parser.ParseFile(fset, "", asValSpec, 0); err == nil && noBadNodes(f) {
 		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-		if noBadNodes(vs) {
-			return vs, f, nil
-		}
+		return vs, f, nil
 	}
 	return nil, nil, mainErr
 }

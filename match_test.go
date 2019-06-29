@@ -166,19 +166,19 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(io.Reader)"},
-			`package p; import "io"; var _ = io.Writer(nil)`, 0,
+			`import "io"; var _ = io.Writer(nil)`, 0,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "type(io.Reader)"},
-			`package p; import "io"; var _ = io.Reader(nil)`, 1,
+			`import "io"; var _ = io.Reader(nil)`, 1,
 		},
 		{
 			[]string{"-x", "$x", "-a", "type(int)"},
-			`package p; type I int; func (i I) p() { print(i) }`, 1,
+			`type I int; func (i I) p() { print(i) }`, 1,
 		},
 		{
 			[]string{"-x", "$x", "-a", "type(*I)"},
-			`package p; type I int; var i *I`, 2,
+			`type I int; var i *I`, 2,
 		},
 
 		// type assignability
@@ -188,15 +188,15 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(io.Reader)"},
-			`package p; import "os"; var f *os.File`, 0,
+			`import "os"; var f *os.File`, 0,
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "asgn(io.Reader)"},
-			`package p; import "os"; var f *os.File`, 1,
+			`import "os"; var f *os.File`, 1,
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "asgn(io.Writer)"},
-			`package p; import "io"; var r io.Reader`, 0,
+			`import "io"; var r io.Reader`, 0,
 		},
 		{
 			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
@@ -226,11 +226,11 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "type(int)"},
-			"package p; type I int; var i I", 0,
+			"type I int; var i I", 0,
 		},
 		{
 			[]string{"-x", "var $x $_", "-x", "$x", "-a", "conv(int)"},
-			"package p; type I int; var i I", 1,
+			"type I int; var i I", 1,
 		},
 
 		// comparable types
@@ -250,7 +250,7 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "addr"},
-			"package p; var s struct { i int }; var _ = s.i", 1,
+			"var s struct { i int }; var _ = s.i", 1,
 		},
 
 		// underlying types
@@ -264,7 +264,7 @@ func TestMatch(t *testing.T) {
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(basic)"},
-			`package p; import "io"; var _ = io.SeekEnd`, 1,
+			`import "io"; var _ = io.SeekEnd`, 1,
 		},
 		{
 			[]string{"-x", "var _ = $x", "-x", "$x", "-a", "is(array)"},

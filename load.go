@@ -12,15 +12,16 @@ import (
 )
 
 func (m *matcher) load(wd string, args ...string) ([]*packages.Package, error) {
+	mode := packages.NeedName | packages.NeedImports | packages.NeedSyntax |
+		packages.NeedTypes | packages.NeedTypesInfo
+	if m.recursive { // need the syntax trees for the dependencies too
+		mode |= packages.NeedDeps
+	}
 	cfg := &packages.Config{
-		Mode:  packages.LoadSyntax,
+		Mode:  mode,
 		Dir:   wd,
 		Fset:  m.fset,
 		Tests: m.tests,
-	}
-	if m.recursive {
-		// we'll need the syntax trees for the dependencies too
-		cfg.Mode = packages.LoadAllSyntax
 	}
 	pkgs, err := packages.Load(cfg, args...)
 	if err != nil {

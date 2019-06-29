@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -18,58 +19,67 @@ func tokErr(msg string) wantErr   { return wantErr("cannot tokenize expr: " + ms
 func modErr(msg string) wantErr   { return wantErr("cannot parse mods: " + msg) }
 func parseErr(msg string) wantErr { return wantErr("cannot parse expr: " + msg) }
 
-func TestMatch(t *testing.T) {
+func TestErrors(t *testing.T) {
 	tests := []struct {
-		args    []string
-		src     string
-		anyWant interface{}
+		args []string
+		want interface{}
 	}{
+
 		// expr tokenize errors
-		{[]string{"-x", "$"}, "a", tokErr(`1:2: $ must be followed by ident, got EOF`)},
-		{[]string{"-x", `"`}, "a", tokErr(`1:1: string literal not terminated`)},
-		{[]string{"-x", ""}, "a", parseErr(`empty source code`)},
-		{[]string{"-x", "\t"}, "a", parseErr(`empty source code`)},
+		{[]string{"-x", "$"}, tokErr(`1:2: $ must be followed by ident, got EOF`)},
+		{[]string{"-x", `"`}, tokErr(`1:1: string literal not terminated`)},
+		{[]string{"-x", ""}, parseErr(`empty source code`)},
+		{[]string{"-x", "\t"}, parseErr(`empty source code`)},
 		{
 			[]string{"-x", "$x", "-a", "a"},
-			"a", modErr(`1:2: wanted (`),
+			modErr(`1:2: wanted (`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "a("},
-			"a", modErr(`1:1: unknown op "a"`),
+			modErr(`1:1: unknown op "a"`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "is(foo)"},
-			"a", modErr(`1:4: unknown type: "foo"`),
+			modErr(`1:4: unknown type: "foo"`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "type("},
-			"a", modErr(`1:5: expected ) to close (`),
+			modErr(`1:5: expected ) to close (`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "type({)"},
-			"a", modErr(`1:1: expected operand, found '{'`),
-		},
-		{
-			[]string{"-x", "$x", "-a", "type(foo)"},
-			"package p; var i int", 0,
+			modErr(`1:1: expected operand, found '{'`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "comp etc"},
-			"a", modErr(`1:6: wanted EOF, got IDENT`),
+			modErr(`1:6: wanted EOF, got IDENT`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "is(slice) etc"},
-			"a", modErr(`1:11: wanted EOF, got IDENT`),
+			modErr(`1:11: wanted EOF, got IDENT`),
 		},
 
 		// expr parse errors
-		{[]string{"-x", "foo)"}, "a", parseErr(`1:4: expected statement, found ')'`)},
-		{[]string{"-x", "{"}, "a", parseErr(`1:4: expected '}', found 'EOF'`)},
-		{[]string{"-x", "$x)"}, "a", parseErr(`1:3: expected statement, found ')'`)},
-		{[]string{"-x", "$x("}, "a", parseErr(`1:5: expected operand, found '}'`)},
-		{[]string{"-x", "$*x)"}, "a", parseErr(`1:4: expected statement, found ')'`)},
-		{[]string{"-x", "a\n$x)"}, "a", parseErr(`2:3: expected statement, found ')'`)},
+		{[]string{"-x", "foo)"}, parseErr(`1:4: expected statement, found ')'`)},
+		{[]string{"-x", "{"}, parseErr(`1:4: expected '}', found 'EOF'`)},
+		{[]string{"-x", "$x)"}, parseErr(`1:3: expected statement, found ')'`)},
+		{[]string{"-x", "$x("}, parseErr(`1:5: expected operand, found '}'`)},
+		{[]string{"-x", "$*x)"}, parseErr(`1:4: expected statement, found ')'`)},
+		{[]string{"-x", "a\n$x)"}, parseErr(`2:3: expected statement, found ')'`)},
+	}
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
+			grepTest(t, tc.args, "nosrc", tc.want)
+		})
+	}
+}
 
+func TestMatch(t *testing.T) {
+	tests := []struct {
+		args []string
+		src  string
+		want interface{}
+	}{
 		// basic lits
 		{[]string{"-x", "123"}, "123", 1},
 		{[]string{"-x", "false"}, "true", 0},
@@ -755,30 +765,42 @@ func TestMatch(t *testing.T) {
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
-			grepTest(t, tc.args, tc.src, tc.anyWant)
+			grepTest(t, tc.args, tc.src, tc.want)
 		})
 	}
 }
 
-func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
-	var strs []string
-	switch x := args.(type) {
-	case string:
-		strs = append(strs, x)
-	case []string:
-		strs = x
-	default:
-		t.Fatalf("unexpected type: %T\n", x)
+type wantMultiline string
+
+func TestMatchMultiline(t *testing.T) {
+	tests := []struct {
+		args []string
+		src  string
+		want string
+	}{
+		// {
+		// 	[]string{"-x", "List{$e}", "-s", "$e", "-w"},
+		// 	"return List{\n\tfoo(),\n}",
+		// 	"return foo()",
+		// },
 	}
-	terr := func(format string, a ...interface{}) {
-		t.Errorf("%v | %s: %s", args, src, fmt.Sprintf(format, a...))
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
+			grepTest(t, tc.args, tc.src, wantMultiline(tc.want))
+		})
 	}
-	m := matcher{}
-	cmds, paths, err := m.parseCmds(strs)
+}
+
+func grepTest(t *testing.T, args []string, src string, want interface{}) {
+	tfatalf := func(format string, a ...interface{}) {
+		t.Fatalf("%v | %s: %s", args, src, fmt.Sprintf(format, a...))
+	}
+	m := matcher{fset: token.NewFileSet()}
+	cmds, paths, err := m.parseCmds(args)
 	if len(paths) > 0 {
 		t.Fatalf("non-zero paths: %v", paths)
 	}
-	srcNode, srcErr := parseDetectingNode(src)
+	srcNode, srcErr := parseDetectingNode(m.fset, src)
 	if srcErr != nil {
 		t.Fatal(srcErr)
 	}
@@ -786,49 +808,49 @@ func grepTest(t *testing.T, args interface{}, src string, anyWant interface{}) {
 	m.Info = &types.Info{}
 	if m.typed && ok {
 		pkg := types.NewPackage("", "")
-		fset := token.NewFileSet()
-		fset.AddFile("", fset.Base(), len(src)*10)
 		m.Info.Types = make(map[ast.Expr]types.TypeAndValue)
 		m.Info.Defs = make(map[*ast.Ident]types.Object)
 		m.Info.Uses = make(map[*ast.Ident]types.Object)
 		m.Info.Scopes = make(map[ast.Node]*types.Scope)
 		config := &types.Config{Importer: importer.Default()}
-		check := types.NewChecker(config, fset, pkg, m.Info)
+		check := types.NewChecker(config, m.fset, pkg, m.Info)
 		if err := check.Files([]*ast.File{f}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	m.fset = emptyFset
 	matches := m.matches(cmds, []ast.Node{srcNode})
-	switch want := anyWant.(type) {
-	case wantErr:
+	if want, ok := want.(wantErr); ok {
 		if err == nil {
-			terr("wanted error %q, got none", want)
+			tfatalf("wanted error %q, got none", want)
 		} else if got := err.Error(); got != string(want) {
-			terr("wanted error %q, got %q", want, got)
+			tfatalf("wanted error %q, got %q", want, got)
 		}
-	case int:
-		if err != nil {
-			terr("unexpected error: %v", err)
-			return
-		}
+		return
+	}
+	if err != nil {
+		tfatalf("unexpected error: %v", err)
+	}
+	if want, ok := want.(int); ok {
 		if len(matches) != want {
-			terr("wanted %d matches, got %d", want, len(matches))
+			tfatalf("wanted %d matches, got %d", want, len(matches))
 		}
+		return
+	}
+	if len(matches) != 1 {
+		tfatalf("wanted 1 match, got %d", len(matches))
+	}
+	var got string
+	switch want := want.(type) {
 	case string:
-		if err != nil {
-			terr("unexpected error: %v", err)
-			return
-		}
-		if len(matches) != 1 {
-			terr("wanted 1 match, got %d", len(matches))
-			return
-		}
-		got := singleLinePrint(matches[0])
-		if got != want {
-			terr("wanted %q match, got %q", want, got)
-		}
+		got = singleLinePrint(matches[0])
+	case wantMultiline:
+		var buf bytes.Buffer
+		printNode(&buf, m.fset, matches[0])
+		got = buf.String()
 	default:
-		panic(fmt.Sprintf("unexpected anyWant type: %T", anyWant))
+		panic(fmt.Sprintf("unexpected want type: %T", want))
+	}
+	if got != want {
+		tfatalf("wanted %q match, got %q", want, got)
 	}
 }

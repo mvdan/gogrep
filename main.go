@@ -136,11 +136,11 @@ func (o *boolCmdFlag) Set(val string) error {
 func (o *boolCmdFlag) IsBoolFlag() bool { return true }
 
 func (m *matcher) fromArgs(wd string, args []string) error {
+	m.fset = token.NewFileSet()
 	cmds, args, err := m.parseCmds(args)
 	if err != nil {
 		return err
 	}
-	m.fset = token.NewFileSet()
 	pkgs, err := m.load(wd, args...)
 	if err != nil {
 		return err

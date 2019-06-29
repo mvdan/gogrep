@@ -65,7 +65,7 @@ func (m *matcher) parseExpr(expr string) (ast.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, err := parseDetectingNode(exprStr)
+	node, err := parseDetectingNode(m.fset, exprStr)
 	if err != nil {
 		err = subPosOffsets(err, offs...)
 		return nil, fmt.Errorf("cannot parse expr: %v", err)
@@ -129,8 +129,7 @@ func noBadNodes(node ast.Node) bool {
 	return !any
 }
 
-func parseDetectingNode(src string) (ast.Node, error) {
-	fset := token.NewFileSet()
+func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, error) {
 	file := fset.AddFile("", fset.Base(), len(src))
 	scan := scanner.Scanner{}
 	scan.Init(file, []byte(src), nil, 0)

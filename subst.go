@@ -229,10 +229,12 @@ func scrubPositions(node ast.Node) {
 	})
 }
 
+// fixPositions tries to fix common syntax errors caused from syntax rewrites.
 func fixPositions(node ast.Node) {
 	if top, ok := node.(*topNode); ok {
 		node = top.Node
 	}
+	// fallback sets pos to the 'to' position if not valid.
 	fallback := func(pos *token.Pos, to token.Pos) {
 		if !pos.IsValid() {
 			*pos = to
@@ -243,6 +245,16 @@ func fixPositions(node ast.Node) {
 		switch x := node.(type) {
 		case *ast.GoStmt:
 			fallback(&x.Go, x.Call.Pos())
+		case *ast.ReturnStmt:
+			if len(x.Results) == 0 {
+				break
+			}
+			// Ensure that there's no newline before the returned
+			// values, as otherwise we have a naked return. See
+			// https://github.com/golang/go/issues/32854.
+			if pos := x.Results[0].Pos(); pos > x.Return {
+				x.Return = pos
+			}
 		}
 		return true
 	})

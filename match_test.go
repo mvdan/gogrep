@@ -778,11 +778,11 @@ func TestMatchMultiline(t *testing.T) {
 		src  string
 		want string
 	}{
-		// {
-		// 	[]string{"-x", "List{$e}", "-s", "$e", "-w"},
-		// 	"return List{\n\tfoo(),\n}",
-		// 	"return foo()",
-		// },
+		{
+			[]string{"-x", "List{$e}", "-s", "$e", "-w"},
+			"return List{\n\tfoo(),\n}",
+			"return foo()",
+		},
 	}
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("%03d", i), func(t *testing.T) {
@@ -793,7 +793,7 @@ func TestMatchMultiline(t *testing.T) {
 
 func grepTest(t *testing.T, args []string, src string, want interface{}) {
 	tfatalf := func(format string, a ...interface{}) {
-		t.Fatalf("%v | %s: %s", args, src, fmt.Sprintf(format, a...))
+		t.Fatalf("%v | %q: %s", args, src, fmt.Sprintf(format, a...))
 	}
 	m := matcher{fset: token.NewFileSet()}
 	cmds, paths, err := m.parseCmds(args)
@@ -842,18 +842,20 @@ func grepTest(t *testing.T, args []string, src string, want interface{}) {
 	if len(matches) != 1 {
 		tfatalf("wanted 1 match, got %d", len(matches))
 	}
-	var got string
+	var got, wantStr string
 	switch want := want.(type) {
 	case string:
+		wantStr = want
 		got = singleLinePrint(matches[0])
 	case wantMultiline:
+		wantStr = string(want)
 		var buf bytes.Buffer
 		printNode(&buf, m.fset, matches[0])
 		got = buf.String()
 	default:
 		panic(fmt.Sprintf("unexpected want type: %T", want))
 	}
-	if got != want {
-		tfatalf("wanted %q match, got %q", want, got)
+	if got != wantStr {
+		tfatalf("wanted %q, got %q", wantStr, got)
 	}
 }

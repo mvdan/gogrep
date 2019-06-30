@@ -457,18 +457,32 @@ func TestMatch(t *testing.T) {
 		{[]string{"-x", "$*x; b; $*y"}, "a; b; c", 1},
 		{[]string{"-x", "$*x; b; $*x"}, "a; b; c", 0},
 
-		// declarations
+		// const/var declarations
 		{[]string{"-x", "const $x = $y"}, "const a = b", 1},
 		{[]string{"-x", "const $x = $y"}, "const (a = b)", 1},
 		{[]string{"-x", "const $x = $y"}, "const (a = b\nc = d)", 0},
 		{[]string{"-x", "var $x int"}, "var a int", 1},
 		{[]string{"-x", "var $x int"}, "var a int = 3", 0},
+
+		// func declarations
 		{
 			[]string{"-x", "func $_($x $y) $y { return $x }"},
 			"func a(i int) int { return i }", 1,
 		},
 		{[]string{"-x", "func $x(i int)"}, "func a(i int)", 1},
 		{[]string{"-x", "func $x(i int) {}"}, "func a(i int)", 0},
+
+		// type declarations
+		{[]string{"-x", "struct{}"}, "type T struct{}", 1},
+		{[]string{"-x", "type $x struct{}"}, "type T struct{}", 1},
+		{[]string{"-x", "struct{$_ int}"}, "type T struct{n int}", 1},
+		{[]string{"-x", "struct{$_ int}"}, "var V struct{n int}", 1},
+		{[]string{"-x", "struct{$_}"}, "type T struct{n int}", 1},
+		{[]string{"-x", "struct{$*_}"}, "type T struct{n int}", 1},
+		{
+			[]string{"-x", "struct{$*_; Foo $t; $*_}"},
+			"type T struct{Foo string; a int; B}", 1,
+		},
 
 		// value specs
 		{[]string{"-x", "$_ int"}, "var a int", 1},

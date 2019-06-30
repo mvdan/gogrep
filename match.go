@@ -381,7 +381,14 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	case *ast.Field:
 		// TODO: tags?
 		y, ok := node.(*ast.Field)
-		return ok && m.idents(x.Names, y.Names) && m.node(x.Type, y.Type)
+		if !ok {
+			return false
+		}
+		if len(x.Names) == 0 && x.Tag == nil && m.node(x.Type, y) {
+			// Allow $var to match a field.
+			return true
+		}
+		return m.idents(x.Names, y.Names) && m.node(x.Type, y.Type)
 	case *ast.FuncType:
 		y, ok := node.(*ast.FuncType)
 		return ok && m.fields(x.Params, y.Params) &&
@@ -584,7 +591,11 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
 			m.node(x.X, y.X) && m.node(x.Body, y.Body)
 
-	case *ast.TypeSpec, *ast.FieldList:
+	case *ast.TypeSpec:
+		y, ok := node.(*ast.TypeSpec)
+		return ok && m.node(x.Name, y.Name) && m.node(x.Type, y.Type)
+
+	case *ast.FieldList:
 		// we ignore these, for now
 		return false
 	default:
@@ -1000,23 +1011,21 @@ func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
 	if fields1 == nil || fields2 == nil {
 		return fields1 == fields2
 	}
-	if len(fields1.List) != len(fields2.List) {
-		return false
-	}
-	for i, f1 := range fields1.List {
-		if !m.node(f1, fields2.List[i]) {
-			return false
-		}
-	}
-	return true
+	return m.nodesMatch(fieldList(fields1.List), fieldList(fields2.List))
 }
 
 func fromWildNode(node ast.Node) int {
-	switch x := node.(type) {
+	switch node := node.(type) {
 	case *ast.Ident:
-		return fromWildName(x.Name)
+		return fromWildName(node.Name)
 	case *ast.ExprStmt:
-		return fromWildNode(x.X)
+		return fromWildNode(node.X)
+	case *ast.Field:
+		// Allow $var to represent an entire field; the lone identifier
+		// gets picked up as an anonymous field.
+		if len(node.Names) == 0 && node.Tag == nil {
+			return fromWildNode(node.Type)
+		}
 	}
 	return -1
 }
@@ -1057,28 +1066,34 @@ type exprList []ast.Expr
 type identList []*ast.Ident
 type stmtList []ast.Stmt
 type specList []ast.Spec
+type fieldList []*ast.Field
 
 func (l exprList) len() int  { return len(l) }
 func (l identList) len() int { return len(l) }
 func (l stmtList) len() int  { return len(l) }
 func (l specList) len() int  { return len(l) }
+func (l fieldList) len() int { return len(l) }
 
 func (l exprList) at(i int) ast.Node  { return l[i] }
 func (l identList) at(i int) ast.Node { return l[i] }
 func (l stmtList) at(i int) ast.Node  { return l[i] }
 func (l specList) at(i int) ast.Node  { return l[i] }
+func (l fieldList) at(i int) ast.Node { return l[i] }
 
 func (l exprList) slice(i, j int) nodeList  { return l[i:j] }
 func (l identList) slice(i, j int) nodeList { return l[i:j] }
 func (l stmtList) slice(i, j int) nodeList  { return l[i:j] }
 func (l specList) slice(i, j int) nodeList  { return l[i:j] }
+func (l fieldList) slice(i, j int) nodeList { return l[i:j] }
 
 func (l exprList) Pos() token.Pos  { return l[0].Pos() }
 func (l identList) Pos() token.Pos { return l[0].Pos() }
 func (l stmtList) Pos() token.Pos  { return l[0].Pos() }
 func (l specList) Pos() token.Pos  { return l[0].Pos() }
+func (l fieldList) Pos() token.Pos { return l[0].Pos() }
 
 func (l exprList) End() token.Pos  { return l[len(l)-1].End() }
 func (l identList) End() token.Pos { return l[len(l)-1].End() }
 func (l stmtList) End() token.Pos  { return l[len(l)-1].End() }
 func (l specList) End() token.Pos  { return l[len(l)-1].End() }
+func (l fieldList) End() token.Pos { return l[len(l)-1].End() }

@@ -48,7 +48,11 @@ func TestErrors(t *testing.T) {
 		},
 		{
 			[]string{"-x", "$x", "-a", "type({)"},
-			modErr(`1:1: expected operand, found '{'`),
+			modErr(`1:1: expected ';', found '{'`),
+		},
+		{
+			[]string{"-x", "$x", "-a", "type(notType + expr)"},
+			modErr(`1:9: expected ';', found '+'`),
 		},
 		{
 			[]string{"-x", "$x", "-a", "comp etc"},
@@ -180,6 +184,11 @@ func TestMatch(t *testing.T) {
 			[]string{"-x", "$x", "-a", "type(*I)"},
 			`type I int; var i *I`, 2,
 		},
+		// TODO
+		// {
+		// 	[]string{"-x", "$x", "-a", "type(chan int)"},
+		// 	`ch := make(chan int)`, 2,
+		// },
 
 		// type assignability
 		{

@@ -129,6 +129,17 @@ func noBadNodes(node ast.Node) bool {
 	return !any
 }
 
+func parseType(fset *token.FileSet, src string) (ast.Expr, *ast.File, error) {
+	asType := execTmpl(tmplType, src)
+	f, err := parser.ParseFile(fset, "", asType, 0)
+	if err != nil {
+		err = subPosOffsets(err, posOffset{1, 1, 17})
+		return nil, nil, err
+	}
+	vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
+	return vs.Type, f, nil
+}
+
 // parseDetectingNode tries its best to parse the ast.Node contained in src, as
 // one of: *ast.File, ast.Decl, ast.Expr, ast.Stmt, *ast.ValueSpec.
 // It also returns the *ast.File used for the parsing, so that the returned node
@@ -184,10 +195,8 @@ func parseDetectingNode(fset *token.FileSet, src string) (ast.Node, *ast.File, e
 	}
 
 	// type expressions not yet picked up, for e.g. chans and interfaces
-	asType := execTmpl(tmplType, src)
-	if f, err := parser.ParseFile(fset, "", asType, 0); err == nil && noBadNodes(f) {
-		vs := f.Decls[0].(*ast.GenDecl).Specs[0].(*ast.ValueSpec)
-		return vs.Type, f, nil
+	if typ, f, err := parseType(fset, src); err == nil && noBadNodes(f) {
+		return typ, f, nil
 	}
 
 	// value specs
@@ -396,7 +405,8 @@ func (m *matcher) parseAttrs(src string) (attribute, error) {
 		}
 		end := t.pos.Offset - 1
 		typeStr := strings.TrimSpace(string(src[start:end]))
-		typeExpr, err := parser.ParseExpr(typeStr)
+		fset := token.NewFileSet()
+		typeExpr, _, err := parseType(fset, typeStr)
 		if err != nil {
 			return nil, err
 		}

@@ -644,6 +644,15 @@ func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		return types.NewArray(elt, len)
 	case *ast.StarExpr:
 		return types.NewPointer(m.resolveType(scope, x.X))
+	case *ast.ChanType:
+		dir := types.SendRecv
+		switch x.Dir {
+		case ast.SEND:
+			dir = types.SendOnly
+		case ast.RECV:
+			dir = types.RecvOnly
+		}
+		return types.NewChan(dir, m.resolveType(scope, x.Value))
 	case *ast.SelectorExpr:
 		scope = m.findScope(scope, x.X)
 		return m.resolveType(scope, x.Sel)

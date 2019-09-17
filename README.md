@@ -1,8 +1,6 @@
 # gogrep
 
-[![Build Status](https://travis-ci.org/mvdan/gogrep.svg?branch=master)](https://travis-ci.org/mvdan/gogrep)
-
-	go get -u mvdan.cc/gogrep
+	go get mvdan.cc/gogrep
 
 Search for Go code using syntax trees. Work in progress.
 

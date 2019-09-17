@@ -107,6 +107,7 @@ func TestLoad(t *testing.T) {
 					t.Fatalf("wanted error %q, got none", x)
 				}
 				want, got := x.Error(), err.Error()
+				want = filepath.FromSlash(want)
 				if !strings.Contains(got, want) {
 					t.Fatalf("wanted error %q, got %q", want, got)
 				}
@@ -116,6 +117,7 @@ func TestLoad(t *testing.T) {
 				}
 				want := strings.TrimSpace(strings.Replace(x, "\t", "", -1))
 				got := strings.TrimSpace(buf.String())
+				want = filepath.FromSlash(want)
 				if want != got {
 					t.Fatalf("wanted:\n%s\ngot:\n%s", want, got)
 				}

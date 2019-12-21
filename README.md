@@ -21,7 +21,7 @@ A command is of the form "-A pattern", where -A is one of:
 
 A pattern is a piece of Go code which may include wildcards. It can be:
 
-       a statement (many if split by semicolonss)
+       a statement (many if split by semicolons)
        an expression (many if split by commas)
        a type expression
        a top-level declaration (var, func, const)

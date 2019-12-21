@@ -1071,11 +1071,13 @@ func nodeLists(n ast.Node) []nodeList {
 	return lists
 }
 
-type exprList []ast.Expr
-type identList []*ast.Ident
-type stmtList []ast.Stmt
-type specList []ast.Spec
-type fieldList []*ast.Field
+type (
+	exprList  []ast.Expr
+	identList []*ast.Ident
+	stmtList  []ast.Stmt
+	specList  []ast.Spec
+	fieldList []*ast.Field
+)
 
 func (l exprList) len() int  { return len(l) }
 func (l identList) len() int { return len(l) }

@@ -41,11 +41,6 @@ If `*` is before the name, it will match any number of nodes. Example:
 	for $*_ { $*_ }    // will match all for loops
 	if $*_; $b { $*_ } // will match all ifs with condition $b
 
-Regexes can also be used to match certain identifier names only. The
-`.*` pattern can be used to match all identifiers. Example:
-
-       fmt.$(_ /Fprint.*/)(os.Stdout, $*_) // all Fprint* on stdout
-
 The nodes resulting from applying the commands will be printed line by
 line to standard output.
 

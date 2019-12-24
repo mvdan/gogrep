@@ -480,6 +480,14 @@ func TestMatch(t *testing.T) {
 		},
 		{[]string{"-x", "func $x(i int)"}, "func a(i int)", 1},
 		{[]string{"-x", "func $x(i int) {}"}, "func a(i int)", 0},
+		{
+			[]string{"-x", "func $_() $*_ { $*_ }"},
+			"func f() {}", 1,
+		},
+		{
+			[]string{"-x", "func $_() $*_ { $*_ }"},
+			"func f() (int, error) { return 3, nil }", 1,
+		},
 
 		// type declarations
 		{[]string{"-x", "struct{}"}, "type T struct{}", 1},

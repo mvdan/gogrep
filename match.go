@@ -1017,10 +1017,14 @@ func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
 }
 
 func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
-	if fields1 == nil || fields2 == nil {
-		return fields1 == fields2
+	var list1, list2 fieldList
+	if fields1 != nil {
+		list1 = fields1.List
 	}
-	return m.nodesMatch(fieldList(fields1.List), fieldList(fields2.List))
+	if fields2 != nil {
+		list2 = fields2.List
+	}
+	return m.nodesMatch(list1, list2)
 }
 
 func fromWildNode(node ast.Node) int {

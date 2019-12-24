@@ -1,6 +1,6 @@
 # gogrep
 
-	go get mvdan.cc/gogrep
+	GO111MODULE=on go get mvdan.cc/gogrep
 
 Search for Go code using syntax trees. Work in progress.
 

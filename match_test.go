@@ -516,6 +516,7 @@ func TestMatch(t *testing.T) {
 		// blocks
 		{[]string{"-x", "{ $x }"}, "{ a() }", 1},
 		{[]string{"-x", "{ $x }"}, "{ a(); b() }", 0},
+		{[]string{"-x", "{}"}, "func f() {}", 1},
 
 		// assigns
 		{[]string{"-x", "$x = $y"}, "a = b", 1},

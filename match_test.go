@@ -530,6 +530,8 @@ func TestMatch(t *testing.T) {
 		// for and range stmts
 		{[]string{"-x", "for $x { $y }"}, "for b { c() }", 1},
 		{[]string{"-x", "for $x := range $y { $z }"}, "for i := range l { c() }", 1},
+		{[]string{"-x", "for $x := range $y { $z }"}, "for i = range l { c() }", 0},
+		{[]string{"-x", "for $x = range $y { $z }"}, "for i := range l { c() }", 0},
 		{[]string{"-x", "for range $y { $z }"}, "for _, e := range l { e() }", 0},
 
 		// $*_ matching stmt+expr combos (ifs)

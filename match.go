@@ -588,7 +588,13 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			m.optNode(x.Post, y.Post) && m.node(x.Body, y.Body)
 	case *ast.RangeStmt:
 		y, ok := node.(*ast.RangeStmt)
-		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
+		if !ok {
+			return false
+		}
+		if !m.aggressive && x.Tok != y.Tok {
+			return false
+		}
+		return m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
 			m.node(x.X, y.X) && m.node(x.Body, y.Body)
 
 	case *ast.TypeSpec:

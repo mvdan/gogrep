@@ -1,0 +1,58 @@
+exec go mod edit -replace=mvdan.cc/gogrep=${MOD_DIR}
+
+gogrep mvdan.cc/gogrep/builtin -tests ./...
+cmp stdout stdout.golden
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+
+-- f.go --
+package bar
+
+-- f_test.go --
+package bar
+
+import "testing"
+
+func TestSync(t *testing.T) {
+	t.Log("test body")
+}
+
+func TestParallel(t *testing.T) {
+	t.Parallel()
+	t.Log("test body")
+}
+
+func TestSyncBoth(t *testing.T) {
+	t.Log("test body")
+
+	t.Run("Subtest1", func(t *testing.T) {
+		t.Log("subtest body")
+	})
+}
+
+func TestSyncParent(t *testing.T) {
+	t.Log("test body")
+
+	t.Run("Subtest2", func(t *testing.T) {
+		t.Parallel()
+		t.Log("subtest body")
+	})
+}
+
+func TestSyncSubtest(t *testing.T) {
+	t.Parallel()
+	t.Log("test body")
+
+	t.Run("Subtest3", func(t *testing.T) {
+		t.Log("subtest body")
+	})
+}
+
+-- stdout.golden --
+f_test.go:5:1: TestSync is not parallel
+f_test.go:14:1: TestSyncBoth is not parallel
+f_test.go:17:2: subtest "Subtest1" is not parallel
+f_test.go:35:2: subtest "Subtest3" is not parallel

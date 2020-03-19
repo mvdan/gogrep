@@ -1,0 +1,21 @@
+gogrep 'All(`return $x`); All(`$x`)' ./...
+cmp stdout stdout.golden
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+
+-- f.go --
+package bar
+
+func True() bool { return true }
+
+-- baz/f.go --
+package baz
+
+func Baz() string { return "baz" }
+
+-- stdout.golden --
+f.go:3:27: true
+baz/f.go:3:28: "baz"

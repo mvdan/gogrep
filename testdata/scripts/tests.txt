@@ -1,0 +1,55 @@
+exec go mod edit -replace=mvdan.cc/gogrep=${MOD_DIR}
+
+gogrep . -tests ./...
+cmp stdout stdout.golden
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+
+-- gogrep.go --
+// +build gogrep
+
+package bar
+
+import "mvdan.cc/gogrep/nls"
+
+func Printlns(g *nls.G) {
+	g.All(`println($x)`)
+}
+
+func NonParallelTests(g *nls.G) {
+	g.All(`func $fn(t *testing.T) { $*_ }`)
+	g.Excluding(`t.Parallel()`)
+	g.Report("$fn is not parallel")
+}
+
+-- nontest.go --
+package bar
+
+func NonTest() { println("NonTest") }
+
+-- intest_test.go --
+package bar
+
+func InTest() { println("InTest") }
+
+-- intestpkg_test.go --
+package bar_test
+
+import "testing"
+
+func InTestPkg() { println("InTestPkg") }
+
+func TestNotParallel1(t *testing.T) { t.Log("not doing much once") }
+
+func TestNotParallel2(t *testing.T) { t.Log("not doing much twice") }
+
+-- stdout.golden --
+intestpkg_test.go:7:1: TestNotParallel1 is not parallel
+intestpkg_test.go:9:1: TestNotParallel2 is not parallel
+nontest.go:3:18: println("NonTest")
+nontest.go:3:18: println("NonTest")
+intest_test.go:3:17: println("InTest")
+intestpkg_test.go:5:20: println("InTestPkg")

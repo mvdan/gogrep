@@ -1,7 +1,7 @@
 // Copyright (c) 2017, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
-package main
+package nls
 
 import (
 	"fmt"
@@ -9,47 +9,10 @@ import (
 	"go/importer"
 	"go/token"
 	"go/types"
-	"regexp"
 	"strconv"
+
+	"mvdan.cc/gogrep/gsyntax"
 )
-
-func (m *matcher) matches(cmds []exprCmd, nodes []ast.Node) []ast.Node {
-	m.parents = make(map[ast.Node]ast.Node)
-	m.fillParents(nodes...)
-	initial := make([]submatch, len(nodes))
-	for i, node := range nodes {
-		initial[i].node = node
-		initial[i].values = make(map[string]ast.Node)
-	}
-	final := m.submatches(cmds, initial)
-	finalNodes := make([]ast.Node, len(final))
-	for i := range finalNodes {
-		finalNodes[i] = final[i].node
-	}
-	return finalNodes
-}
-
-func (m *matcher) fillParents(nodes ...ast.Node) {
-	stack := make([]ast.Node, 1, 32)
-	for _, node := range nodes {
-		inspect(node, func(node ast.Node) bool {
-			if node == nil {
-				stack = stack[:len(stack)-1]
-				return true
-			}
-			if _, ok := node.(nodeList); !ok {
-				m.parents[node] = stack[len(stack)-1]
-			}
-			stack = append(stack, node)
-			return true
-		})
-	}
-}
-
-type submatch struct {
-	node   ast.Node
-	values map[string]ast.Node
-}
 
 func valsCopy(values map[string]ast.Node) map[string]ast.Node {
 	v2 := make(map[string]ast.Node, len(values))
@@ -59,209 +22,63 @@ func valsCopy(values map[string]ast.Node) map[string]ast.Node {
 	return v2
 }
 
-func (m *matcher) submatches(cmds []exprCmd, subs []submatch) []submatch {
-	if len(cmds) == 0 {
-		return subs
-	}
-	cmd := cmds[0]
-	var fn func(exprCmd, []submatch) []submatch
-	switch cmd.name {
-	case "x":
-		fn = m.cmdRange
-	case "g":
-		fn = m.cmdFilter(true)
-	case "v":
-		fn = m.cmdFilter(false)
-	case "s":
-		fn = m.cmdSubst
-	case "a":
-		fn = m.cmdAttr
-	case "p":
-		fn = m.cmdParents
-	case "w":
-		if len(cmds) > 1 {
-			panic("-w must be the last command")
+func nodeLists(n ast.Node) []gsyntax.NodeList {
+	var lists []gsyntax.NodeList
+	addList := func(list gsyntax.NodeList) {
+		if list.Len() > 0 {
+			lists = append(lists, list)
 		}
-		fn = m.cmdWrite
-	default:
-		panic(fmt.Sprintf("unknown command: %q", cmd.name))
 	}
-	return m.submatches(cmds[1:], fn(cmd, subs))
+	switch x := n.(type) {
+	case gsyntax.NodeList:
+		addList(x)
+	case *ast.CompositeLit:
+		addList(gsyntax.ExprList(x.Elts))
+	case *ast.CallExpr:
+		addList(gsyntax.ExprList(x.Args))
+	case *ast.AssignStmt:
+		addList(gsyntax.ExprList(x.Lhs))
+		addList(gsyntax.ExprList(x.Rhs))
+	case *ast.ReturnStmt:
+		addList(gsyntax.ExprList(x.Results))
+	case *ast.ValueSpec:
+		addList(gsyntax.ExprList(x.Values))
+	case *ast.BlockStmt:
+		addList(gsyntax.StmtList(x.List))
+	case *ast.CaseClause:
+		addList(gsyntax.ExprList(x.List))
+		addList(gsyntax.StmtList(x.Body))
+	case *ast.CommClause:
+		addList(gsyntax.StmtList(x.Body))
+	}
+	return lists
 }
 
-func (m *matcher) cmdRange(cmd exprCmd, subs []submatch) []submatch {
-	var matches []submatch
-	seen := map[nodePosHash]bool{}
-
-	// The values context for each new submatch must be a new copy
-	// from its parent submatch. If we don't do this copy, all the
-	// submatches would share the same map and have side effects.
-	var startValues map[string]ast.Node
-
-	match := func(exprNode, node ast.Node) {
-		if node == nil {
-			return
-		}
-		m.values = valsCopy(startValues)
-		found := m.topNode(exprNode, node)
-		if found == nil {
-			return
-		}
-		hash := posHash(found)
-		if !seen[hash] {
-			matches = append(matches, submatch{
-				node:   found,
-				values: m.values,
-			})
-			seen[hash] = true
-		}
-	}
-	for _, sub := range subs {
-		startValues = valsCopy(sub.values)
-		m.walkWithLists(cmd.value.(ast.Node), sub.node, match)
-	}
-	return matches
-}
-
-func (m *matcher) cmdFilter(wantAny bool) func(exprCmd, []submatch) []submatch {
-	return func(cmd exprCmd, subs []submatch) []submatch {
-		var matches []submatch
-		any := false
-		match := func(exprNode, node ast.Node) {
-			if node == nil {
-				return
-			}
-			found := m.topNode(exprNode, node)
-			if found != nil {
-				any = true
-			}
-		}
-		for _, sub := range subs {
-			any = false
-			m.values = sub.values
-			m.walkWithLists(cmd.value.(ast.Node), sub.node, match)
-			if any == wantAny {
-				matches = append(matches, sub)
-			}
-		}
-		return matches
-	}
-}
-
-func (m *matcher) cmdAttr(cmd exprCmd, subs []submatch) []submatch {
-	var matches []submatch
-	for _, sub := range subs {
-		m.values = sub.values
-		if m.attrApplies(sub.node, cmd.value.(attribute)) {
-			matches = append(matches, sub)
-		}
-	}
-	return matches
-}
-
-func (m *matcher) cmdParents(cmd exprCmd, subs []submatch) []submatch {
-	for i := range subs {
-		sub := &subs[i]
-		reps := cmd.value.(int)
-		for j := 0; j < reps; j++ {
-			sub.node = m.parentOf(sub.node)
-		}
-	}
-	return subs
-}
-
-func (m *matcher) attrApplies(node ast.Node, attr interface{}) bool {
-	if rx, ok := attr.(*regexp.Regexp); ok {
-		if exprStmt, ok := node.(*ast.ExprStmt); ok {
-			// since we prefer matching entire statements, get the
-			// ident from the ExprStmt
-			node = exprStmt.X
-		}
-		ident, ok := node.(*ast.Ident)
-		return ok && rx.MatchString(ident.Name)
-	}
-	expr, _ := node.(ast.Expr)
-	if expr == nil {
-		return false // only exprs have types
-	}
-	t := m.Info.TypeOf(expr)
-	if t == nil {
-		return false // an expr, but no type?
-	}
-	tv := m.Info.Types[expr]
-	switch x := attr.(type) {
-	case typeCheck:
-		want := m.resolveType(m.scope, x.expr)
-		switch {
-		case x.op == "type" && !types.Identical(t, want):
-			return false
-		case x.op == "asgn" && !types.AssignableTo(t, want):
-			return false
-		case x.op == "conv" && !types.ConvertibleTo(t, want):
-			return false
-		}
-	case typProperty:
-		switch {
-		case x == "comp" && !types.Comparable(t):
-			return false
-		case x == "addr" && !tv.Addressable():
-			return false
-		}
-	case typUnderlying:
-		u := t.Underlying()
-		uok := true
-		switch x {
-		case "basic":
-			_, uok = u.(*types.Basic)
-		case "array":
-			_, uok = u.(*types.Array)
-		case "slice":
-			_, uok = u.(*types.Slice)
-		case "struct":
-			_, uok = u.(*types.Struct)
-		case "interface":
-			_, uok = u.(*types.Interface)
-		case "pointer":
-			_, uok = u.(*types.Pointer)
-		case "func":
-			_, uok = u.(*types.Signature)
-		case "map":
-			_, uok = u.(*types.Map)
-		case "chan":
-			_, uok = u.(*types.Chan)
-		}
-		if !uok {
-			return false
-		}
-	}
-	return true
-}
-
-func (m *matcher) walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
+func (g *G) walkWithLists(exprNode, node ast.Node, fn func(exprNode, node ast.Node)) {
 	visit := func(node ast.Node) bool {
 		fn(exprNode, node)
 		for _, list := range nodeLists(node) {
 			fn(exprNode, list)
-			if id := m.wildAnyIdent(exprNode); id != nil {
+			if id := g.wildAnyIdent(exprNode); id != nil {
 				// so that "$*a" will match "a, b"
-				fn(exprList([]ast.Expr{id}), list)
+				fn(gsyntax.ExprList([]ast.Expr{id}), list)
 				// so that "$*a" will match "a; b"
 				fn(toStmtList(id), list)
 			}
 		}
 		return true
 	}
-	inspect(node, visit)
+	gsyntax.Inspect(node, visit)
 }
 
-func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
-	sts1, ok1 := exprNode.(stmtList)
-	sts2, ok2 := node.(stmtList)
+func (g *G) topNode(exprNode, node ast.Node) ast.Node {
+	sts1, ok1 := exprNode.(gsyntax.StmtList)
+	sts2, ok2 := node.(gsyntax.StmtList)
 	if ok1 && ok2 {
 		// allow a partial match at the top level
-		return m.nodes(sts1, sts2, true)
+		return g.nodes(sts1, sts2, true)
 	}
-	if m.node(exprNode, node) {
+	if g.node(exprNode, node) {
 		return node
 	}
 	return nil
@@ -269,25 +86,25 @@ func (m *matcher) topNode(exprNode, node ast.Node) ast.Node {
 
 // optNode is like node, but for those nodes that can be nil and are not
 // part of a list. For example, init and post statements in a for loop.
-func (m *matcher) optNode(expr, node ast.Node) bool {
-	if ident := m.wildAnyIdent(expr); ident != nil {
-		if m.node(toStmtList(ident), toStmtList(node)) {
+func (g *G) optNode(expr, node ast.Node) bool {
+	if ident := g.wildAnyIdent(expr); ident != nil {
+		if g.node(toStmtList(ident), toStmtList(node)) {
 			return true
 		}
 	}
-	return m.node(expr, node)
+	return g.node(expr, node)
 }
 
-func (m *matcher) node(expr, node ast.Node) bool {
+func (g *G) node(expr, node ast.Node) bool {
 	switch node.(type) {
 	case *ast.File, *ast.FuncType, *ast.BlockStmt, *ast.IfStmt,
 		*ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.CaseClause,
 		*ast.CommClause, *ast.ForStmt, *ast.RangeStmt:
-		if scope := m.Info.Scopes[node]; scope != nil {
-			m.scope = scope
+		if scope := g.Info.Scopes[node]; scope != nil {
+			g.Scope = scope
 		}
 	}
-	if !m.aggressive {
+	if !g.aggressive {
 		if expr == nil || node == nil {
 			return expr == node
 		}
@@ -306,17 +123,17 @@ func (m *matcher) node(expr, node ast.Node) bool {
 
 	case *ast.File:
 		y, ok := node.(*ast.File)
-		if !ok || !m.node(x.Name, y.Name) || len(x.Decls) != len(y.Decls) ||
+		if !ok || !g.node(x.Name, y.Name) || len(x.Decls) != len(y.Decls) ||
 			len(x.Imports) != len(y.Imports) {
 			return false
 		}
 		for i, decl := range x.Decls {
-			if !m.node(decl, y.Decls[i]) {
+			if !g.node(decl, y.Decls[i]) {
 				return false
 			}
 		}
 		for i, imp := range x.Imports {
-			if !m.node(imp, y.Imports[i]) {
+			if !g.node(imp, y.Imports[i]) {
 				return false
 			}
 		}
@@ -332,7 +149,7 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			return false // to not include our extra node types
 		}
 		id := fromWildName(x.Name)
-		info := m.info(id)
+		info := g.info(id)
 		if info.any {
 			return false
 		}
@@ -340,22 +157,22 @@ func (m *matcher) node(expr, node ast.Node) bool {
 			// values are discarded, matches anything
 			return true
 		}
-		prev, ok := m.values[info.name]
+		prev, ok := g.values[info.name]
 		if !ok {
 			// first occurrence, record value
-			m.values[info.name] = node
+			g.values[info.name] = node
 			return true
 		}
 		// multiple uses must match
-		return m.node(prev, node)
+		return g.node(prev, node)
 
 	// lists (ys are generated by us while walking)
-	case exprList:
-		y, ok := node.(exprList)
-		return ok && m.exprs(x, y)
-	case stmtList:
-		y, ok := node.(stmtList)
-		return ok && m.stmts(x, y)
+	case gsyntax.ExprList:
+		y, ok := node.(gsyntax.ExprList)
+		return ok && g.exprs(x, y)
+	case gsyntax.StmtList:
+		y, ok := node.(gsyntax.StmtList)
+		return ok && g.stmts(x, y)
 
 	// lits
 	case *ast.BasicLit:
@@ -363,117 +180,117 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok && x.Kind == y.Kind && x.Value == y.Value
 	case *ast.CompositeLit:
 		y, ok := node.(*ast.CompositeLit)
-		return ok && m.node(x.Type, y.Type) && m.exprs(x.Elts, y.Elts)
+		return ok && g.node(x.Type, y.Type) && g.exprs(x.Elts, y.Elts)
 	case *ast.FuncLit:
 		y, ok := node.(*ast.FuncLit)
-		return ok && m.node(x.Type, y.Type) && m.node(x.Body, y.Body)
+		return ok && g.node(x.Type, y.Type) && g.node(x.Body, y.Body)
 
 	// types
 	case *ast.ArrayType:
 		y, ok := node.(*ast.ArrayType)
-		return ok && m.node(x.Len, y.Len) && m.node(x.Elt, y.Elt)
+		return ok && g.node(x.Len, y.Len) && g.node(x.Elt, y.Elt)
 	case *ast.MapType:
 		y, ok := node.(*ast.MapType)
-		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value)
+		return ok && g.node(x.Key, y.Key) && g.node(x.Value, y.Value)
 	case *ast.StructType:
 		y, ok := node.(*ast.StructType)
-		return ok && m.fields(x.Fields, y.Fields)
+		return ok && g.fields(x.Fields, y.Fields)
 	case *ast.Field:
 		// TODO: tags?
 		y, ok := node.(*ast.Field)
 		if !ok {
 			return false
 		}
-		if len(x.Names) == 0 && x.Tag == nil && m.node(x.Type, y) {
+		if len(x.Names) == 0 && x.Tag == nil && g.node(x.Type, y) {
 			// Allow $var to match a field.
 			return true
 		}
-		return m.idents(x.Names, y.Names) && m.node(x.Type, y.Type)
+		return g.idents(x.Names, y.Names) && g.node(x.Type, y.Type)
 	case *ast.FuncType:
 		y, ok := node.(*ast.FuncType)
-		return ok && m.fields(x.Params, y.Params) &&
-			m.fields(x.Results, y.Results)
+		return ok && g.fields(x.Params, y.Params) &&
+			g.fields(x.Results, y.Results)
 	case *ast.InterfaceType:
 		y, ok := node.(*ast.InterfaceType)
-		return ok && m.fields(x.Methods, y.Methods)
+		return ok && g.fields(x.Methods, y.Methods)
 	case *ast.ChanType:
 		y, ok := node.(*ast.ChanType)
-		return ok && x.Dir == y.Dir && m.node(x.Value, y.Value)
+		return ok && x.Dir == y.Dir && g.node(x.Value, y.Value)
 
 	// other exprs
 	case *ast.Ellipsis:
 		y, ok := node.(*ast.Ellipsis)
-		return ok && m.node(x.Elt, y.Elt)
+		return ok && g.node(x.Elt, y.Elt)
 	case *ast.ParenExpr:
 		y, ok := node.(*ast.ParenExpr)
-		return ok && m.node(x.X, y.X)
+		return ok && g.node(x.X, y.X)
 	case *ast.UnaryExpr:
 		y, ok := node.(*ast.UnaryExpr)
-		return ok && x.Op == y.Op && m.node(x.X, y.X)
+		return ok && x.Op == y.Op && g.node(x.X, y.X)
 	case *ast.BinaryExpr:
 		y, ok := node.(*ast.BinaryExpr)
-		return ok && x.Op == y.Op && m.node(x.X, y.X) && m.node(x.Y, y.Y)
+		return ok && x.Op == y.Op && g.node(x.X, y.X) && g.node(x.Y, y.Y)
 	case *ast.CallExpr:
 		y, ok := node.(*ast.CallExpr)
-		return ok && m.node(x.Fun, y.Fun) && m.exprs(x.Args, y.Args) &&
+		return ok && g.node(x.Fun, y.Fun) && g.exprs(x.Args, y.Args) &&
 			bothValid(x.Ellipsis, y.Ellipsis)
 	case *ast.KeyValueExpr:
 		y, ok := node.(*ast.KeyValueExpr)
-		return ok && m.node(x.Key, y.Key) && m.node(x.Value, y.Value)
+		return ok && g.node(x.Key, y.Key) && g.node(x.Value, y.Value)
 	case *ast.StarExpr:
 		y, ok := node.(*ast.StarExpr)
-		return ok && m.node(x.X, y.X)
+		return ok && g.node(x.X, y.X)
 	case *ast.SelectorExpr:
 		y, ok := node.(*ast.SelectorExpr)
-		return ok && m.node(x.X, y.X) && m.node(x.Sel, y.Sel)
+		return ok && g.node(x.X, y.X) && g.node(x.Sel, y.Sel)
 	case *ast.IndexExpr:
 		y, ok := node.(*ast.IndexExpr)
-		return ok && m.node(x.X, y.X) && m.node(x.Index, y.Index)
+		return ok && g.node(x.X, y.X) && g.node(x.Index, y.Index)
 	case *ast.SliceExpr:
 		y, ok := node.(*ast.SliceExpr)
-		return ok && m.node(x.X, y.X) && m.node(x.Low, y.Low) &&
-			m.node(x.High, y.High) && m.node(x.Max, y.Max)
+		return ok && g.node(x.X, y.X) && g.node(x.Low, y.Low) &&
+			g.node(x.High, y.High) && g.node(x.Max, y.Max)
 	case *ast.TypeAssertExpr:
 		y, ok := node.(*ast.TypeAssertExpr)
-		return ok && m.node(x.X, y.X) && m.node(x.Type, y.Type)
+		return ok && g.node(x.X, y.X) && g.node(x.Type, y.Type)
 
 	// decls
 	case *ast.GenDecl:
 		y, ok := node.(*ast.GenDecl)
-		return ok && x.Tok == y.Tok && m.specs(x.Specs, y.Specs)
+		return ok && x.Tok == y.Tok && g.specs(x.Specs, y.Specs)
 	case *ast.FuncDecl:
 		y, ok := node.(*ast.FuncDecl)
-		return ok && m.fields(x.Recv, y.Recv) && m.node(x.Name, y.Name) &&
-			m.node(x.Type, y.Type) && m.node(x.Body, y.Body)
+		return ok && g.fields(x.Recv, y.Recv) && g.node(x.Name, y.Name) &&
+			g.node(x.Type, y.Type) && g.node(x.Body, y.Body)
 
 	// specs
 	case *ast.ValueSpec:
 		y, ok := node.(*ast.ValueSpec)
-		if !ok || !m.node(x.Type, y.Type) {
+		if !ok || !g.node(x.Type, y.Type) {
 			return false
 		}
-		if m.aggressive && len(x.Names) == 1 {
+		if g.aggressive && len(x.Names) == 1 {
 			for i := range y.Names {
-				if m.node(x.Names[i], y.Names[i]) &&
-					(x.Values == nil || m.node(x.Values[i], y.Values[i])) {
+				if g.node(x.Names[i], y.Names[i]) &&
+					(x.Values == nil || g.node(x.Values[i], y.Values[i])) {
 					return true
 				}
 			}
 		}
-		return m.idents(x.Names, y.Names) && m.exprs(x.Values, y.Values)
+		return g.idents(x.Names, y.Names) && g.exprs(x.Values, y.Values)
 
 	// stmt bridge nodes
 	case *ast.ExprStmt:
 		if id, ok := x.X.(*ast.Ident); ok && isWildName(id.Name) {
 			// prefer matching $x as a statement, as it's
 			// the parent
-			return m.node(id, node)
+			return g.node(id, node)
 		}
 		y, ok := node.(*ast.ExprStmt)
-		return ok && m.node(x.X, y.X)
+		return ok && g.node(x.X, y.X)
 	case *ast.DeclStmt:
 		y, ok := node.(*ast.DeclStmt)
-		return ok && m.node(x.Decl, y.Decl)
+		return ok && g.node(x.Decl, y.Decl)
 
 	// stmts
 	case *ast.EmptyStmt:
@@ -481,39 +298,39 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		return ok
 	case *ast.LabeledStmt:
 		y, ok := node.(*ast.LabeledStmt)
-		return ok && m.node(x.Label, y.Label) && m.node(x.Stmt, y.Stmt)
+		return ok && g.node(x.Label, y.Label) && g.node(x.Stmt, y.Stmt)
 	case *ast.SendStmt:
 		y, ok := node.(*ast.SendStmt)
-		return ok && m.node(x.Chan, y.Chan) && m.node(x.Value, y.Value)
+		return ok && g.node(x.Chan, y.Chan) && g.node(x.Value, y.Value)
 	case *ast.IncDecStmt:
 		y, ok := node.(*ast.IncDecStmt)
-		return ok && x.Tok == y.Tok && m.node(x.X, y.X)
+		return ok && x.Tok == y.Tok && g.node(x.X, y.X)
 	case *ast.AssignStmt:
 		y, ok := node.(*ast.AssignStmt)
-		if !m.aggressive {
+		if !g.aggressive {
 			return ok && x.Tok == y.Tok &&
-				m.exprs(x.Lhs, y.Lhs) && m.exprs(x.Rhs, y.Rhs)
+				g.exprs(x.Lhs, y.Lhs) && g.exprs(x.Rhs, y.Rhs)
 		}
 		if ok {
-			return m.exprs(x.Lhs, y.Lhs) && m.exprs(x.Rhs, y.Rhs)
+			return g.exprs(x.Lhs, y.Lhs) && g.exprs(x.Rhs, y.Rhs)
 		}
 		vs, ok := node.(*ast.ValueSpec)
-		return ok && m.nodesMatch(exprList(x.Lhs), identList(vs.Names)) &&
-			m.exprs(x.Rhs, vs.Values)
+		return ok && g.nodesMatch(gsyntax.ExprList(x.Lhs), gsyntax.IdentList(vs.Names)) &&
+			g.exprs(x.Rhs, vs.Values)
 	case *ast.GoStmt:
 		y, ok := node.(*ast.GoStmt)
-		return ok && m.node(x.Call, y.Call)
+		return ok && g.node(x.Call, y.Call)
 	case *ast.DeferStmt:
 		y, ok := node.(*ast.DeferStmt)
-		return ok && m.node(x.Call, y.Call)
+		return ok && g.node(x.Call, y.Call)
 	case *ast.ReturnStmt:
 		y, ok := node.(*ast.ReturnStmt)
-		return ok && m.exprs(x.Results, y.Results)
+		return ok && g.exprs(x.Results, y.Results)
 	case *ast.BranchStmt:
 		y, ok := node.(*ast.BranchStmt)
-		return ok && x.Tok == y.Tok && m.node(maybeNilIdent(x.Label), maybeNilIdent(y.Label))
+		return ok && x.Tok == y.Tok && g.node(maybeNilIdent(x.Label), maybeNilIdent(y.Label))
 	case *ast.BlockStmt:
-		if m.aggressive && m.node(stmtList(x.List), node) {
+		if g.aggressive && g.node(gsyntax.StmtList(x.List), node) {
 			return true
 		}
 		y, ok := node.(*ast.BlockStmt)
@@ -523,59 +340,59 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if x == nil || y == nil {
 			return x == y
 		}
-		return m.cases(x.List, y.List) || m.stmts(x.List, y.List)
+		return g.cases(x.List, y.List) || g.stmts(x.List, y.List)
 	case *ast.IfStmt:
 		y, ok := node.(*ast.IfStmt)
 		if !ok {
 			return false
 		}
-		condAny := m.wildAnyIdent(x.Cond)
+		condAny := g.wildAnyIdent(x.Cond)
 		if condAny != nil && x.Init == nil {
 			// if $*x { ... } on the left
 			left := toStmtList(condAny)
-			return m.node(left, toStmtList(y.Init, y.Cond)) &&
-				m.node(x.Body, y.Body) && m.optNode(x.Else, y.Else)
+			return g.node(left, toStmtList(y.Init, y.Cond)) &&
+				g.node(x.Body, y.Body) && g.optNode(x.Else, y.Else)
 		}
-		return m.optNode(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
-			m.node(x.Body, y.Body) && m.node(x.Else, y.Else)
+		return g.optNode(x.Init, y.Init) && g.node(x.Cond, y.Cond) &&
+			g.node(x.Body, y.Body) && g.node(x.Else, y.Else)
 	case *ast.CaseClause:
 		y, ok := node.(*ast.CaseClause)
-		return ok && m.exprs(x.List, y.List) && m.stmts(x.Body, y.Body)
+		return ok && g.exprs(x.List, y.List) && g.stmts(x.Body, y.Body)
 	case *ast.SwitchStmt:
 		y, ok := node.(*ast.SwitchStmt)
 		if !ok {
 			return false
 		}
-		tagAny := m.wildAnyIdent(x.Tag)
+		tagAny := g.wildAnyIdent(x.Tag)
 		if tagAny != nil && x.Init == nil {
 			// switch $*x { ... } on the left
 			left := toStmtList(tagAny)
-			return m.node(left, toStmtList(y.Init, y.Tag)) &&
-				m.node(x.Body, y.Body)
+			return g.node(left, toStmtList(y.Init, y.Tag)) &&
+				g.node(x.Body, y.Body)
 		}
-		return m.optNode(x.Init, y.Init) && m.node(x.Tag, y.Tag) && m.node(x.Body, y.Body)
+		return g.optNode(x.Init, y.Init) && g.node(x.Tag, y.Tag) && g.node(x.Body, y.Body)
 	case *ast.TypeSwitchStmt:
 		y, ok := node.(*ast.TypeSwitchStmt)
-		return ok && m.optNode(x.Init, y.Init) && m.node(x.Assign, y.Assign) && m.node(x.Body, y.Body)
+		return ok && g.optNode(x.Init, y.Init) && g.node(x.Assign, y.Assign) && g.node(x.Body, y.Body)
 	case *ast.CommClause:
 		y, ok := node.(*ast.CommClause)
-		return ok && m.node(x.Comm, y.Comm) && m.stmts(x.Body, y.Body)
+		return ok && g.node(x.Comm, y.Comm) && g.stmts(x.Body, y.Body)
 	case *ast.SelectStmt:
 		y, ok := node.(*ast.SelectStmt)
-		return ok && m.node(x.Body, y.Body)
+		return ok && g.node(x.Body, y.Body)
 	case *ast.ForStmt:
-		condIdent := m.wildAnyIdent(x.Cond)
+		condIdent := g.wildAnyIdent(x.Cond)
 		if condIdent != nil && x.Init == nil && x.Post == nil {
 			// "for $*x { ... }" on the left
 			left := toStmtList(condIdent)
 			// also accept RangeStmt on the right
 			switch y := node.(type) {
 			case *ast.ForStmt:
-				return m.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
-					m.node(x.Body, y.Body)
+				return g.node(left, toStmtList(y.Init, y.Cond, y.Post)) &&
+					g.node(x.Body, y.Body)
 			case *ast.RangeStmt:
-				return m.node(left, toStmtList(y.Key, y.Value, y.X)) &&
-					m.node(x.Body, y.Body)
+				return g.node(left, toStmtList(y.Key, y.Value, y.X)) &&
+					g.node(x.Body, y.Body)
 			default:
 				return false
 			}
@@ -584,22 +401,22 @@ func (m *matcher) node(expr, node ast.Node) bool {
 		if !ok {
 			return false
 		}
-		return m.optNode(x.Init, y.Init) && m.node(x.Cond, y.Cond) &&
-			m.optNode(x.Post, y.Post) && m.node(x.Body, y.Body)
+		return g.optNode(x.Init, y.Init) && g.node(x.Cond, y.Cond) &&
+			g.optNode(x.Post, y.Post) && g.node(x.Body, y.Body)
 	case *ast.RangeStmt:
 		y, ok := node.(*ast.RangeStmt)
 		if !ok {
 			return false
 		}
-		if !m.aggressive && x.Tok != y.Tok {
+		if !g.aggressive && x.Tok != y.Tok {
 			return false
 		}
-		return m.node(x.Key, y.Key) && m.node(x.Value, y.Value) &&
-			m.node(x.X, y.X) && m.node(x.Body, y.Body)
+		return g.node(x.Key, y.Key) && g.node(x.Value, y.Value) &&
+			g.node(x.X, y.X) && g.node(x.Body, y.Body)
 
 	case *ast.TypeSpec:
 		y, ok := node.(*ast.TypeSpec)
-		return ok && m.node(x.Name, y.Name) && m.node(x.Type, y.Type)
+		return ok && g.node(x.Name, y.Name) && g.node(x.Type, y.Type)
 
 	case *ast.FieldList:
 		// we ignore these, for now
@@ -609,15 +426,15 @@ func (m *matcher) node(expr, node ast.Node) bool {
 	}
 }
 
-func (m *matcher) wildAnyIdent(node ast.Node) *ast.Ident {
+func (g *G) wildAnyIdent(node ast.Node) *ast.Ident {
 	switch x := node.(type) {
 	case *ast.ExprStmt:
-		return m.wildAnyIdent(x.X)
+		return g.wildAnyIdent(x.X)
 	case *ast.Ident:
 		if !isWildName(x.Name) {
 			return nil
 		}
-		if !m.info(fromWildName(x.Name)).any {
+		if !g.info(fromWildName(x.Name)).any {
 			return nil
 		}
 		return x
@@ -625,8 +442,20 @@ func (m *matcher) wildAnyIdent(node ast.Node) *ast.Ident {
 	return nil
 }
 
+func (g *G) resolveTypeStr(expr string) types.Type {
+	exp, _, err := gsyntax.ParseType(g.Fset, expr)
+	if err != nil {
+		g.Fatal(err)
+	}
+	typ := g.resolveType(g.Scope, exp)
+	if typ == nil {
+		g.Fatal(fmt.Errorf("unknown type: %q", expr))
+	}
+	return typ
+}
+
 // resolveType resolves a type expression from a given scope.
-func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
+func (g *G) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		_, obj := scope.LookupParent(x.Name, token.NoPos)
@@ -638,7 +467,7 @@ func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		}
 		return obj.Type()
 	case *ast.ArrayType:
-		elt := m.resolveType(scope, x.Elt)
+		elt := g.resolveType(scope, x.Elt)
 		if x.Len == nil {
 			return types.NewSlice(elt)
 		}
@@ -649,7 +478,7 @@ func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		len, _ := strconv.ParseInt(bl.Value, 0, 0)
 		return types.NewArray(elt, len)
 	case *ast.StarExpr:
-		return types.NewPointer(m.resolveType(scope, x.X))
+		return types.NewPointer(g.resolveType(scope, x.X))
 	case *ast.ChanType:
 		dir := types.SendRecv
 		switch x.Dir {
@@ -658,16 +487,16 @@ func (m *matcher) resolveType(scope *types.Scope, expr ast.Expr) types.Type {
 		case ast.RECV:
 			dir = types.RecvOnly
 		}
-		return types.NewChan(dir, m.resolveType(scope, x.Value))
+		return types.NewChan(dir, g.resolveType(scope, x.Value))
 	case *ast.SelectorExpr:
-		scope = m.findScope(scope, x.X)
-		return m.resolveType(scope, x.Sel)
+		scope = g.findScope(scope, x.X)
+		return g.resolveType(scope, x.Sel)
 	default:
 		panic(fmt.Sprintf("resolveType TODO: %T", x))
 	}
 }
 
-func (m *matcher) findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
+func (g *G) findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
 	switch x := expr.(type) {
 	case *ast.Ident:
 		_, obj := scope.LookupParent(x.Name, token.NoPos)
@@ -675,14 +504,14 @@ func (m *matcher) findScope(scope *types.Scope, expr ast.Expr) *types.Scope {
 			return pkg.Imported().Scope()
 		}
 		// try to fall back to std
-		if m.stdImporter == nil {
-			m.stdImporter = importer.Default()
+		if g.stdImporter == nil {
+			g.stdImporter = importer.Default()
 		}
 		path := x.Name
 		if longer, ok := stdImportFixes[path]; ok {
 			path = longer
 		}
-		pkg, err := m.stdImporter.Import(path)
+		pkg, err := g.stdImporter.Import(path)
 		if err != nil {
 			panic(fmt.Sprintf("findScope err: %v", err))
 		}
@@ -819,17 +648,10 @@ func bothValid(p1, p2 token.Pos) bool {
 	return p1.IsValid() == p2.IsValid()
 }
 
-type nodeList interface {
-	at(i int) ast.Node
-	len() int
-	slice(from, to int) nodeList
-	ast.Node
-}
-
 // nodes matches two lists of nodes. It uses a common algorithm to match
 // wildcard patterns with any number of nodes without recursion.
-func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
-	ns1len, ns2len := ns1.len(), ns2.len()
+func (g *G) nodes(ns1, ns2 gsyntax.NodeList, partial bool) ast.Node {
+	ns1len, ns2len := ns1.Len(), ns2.Len()
 	if ns1len == 0 {
 		if ns2len == 0 {
 			return ns2
@@ -840,7 +662,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 	i1, i2 := 0, 0
 	next1, next2 := 0, 0
 
-	// We need to keep a copy of m.values so that we can restart
+	// We need to keep a copy of g.values so that we can restart
 	// with a different "any of" match while discarding any matches
 	// we found while trying it.
 	type restart struct {
@@ -857,12 +679,12 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 		if n2 > ns2len {
 			return // would be discarded anyway
 		}
-		stack = append(stack, restart{valsCopy(m.values), n1, n2})
+		stack = append(stack, restart{valsCopy(g.values), n1, n2})
 		next1, next2 = n1, n2
 	}
 	pop := func() {
 		i1, i2 = next1, next2
-		m.values = stack[len(stack)-1].matches
+		g.values = stack[len(stack)-1].matches
 		stack = stack[:len(stack)-1]
 		next1, next2 = 0, 0
 		if len(stack) > 0 {
@@ -880,20 +702,20 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 		case "", "_":
 			return true
 		}
-		list := ns2.slice(wildStart, i2)
+		list := ns2.Slice(wildStart, i2)
 		// check that it matches any nodes found elsewhere
-		prev, ok := m.values[wildName]
-		if ok && !m.node(prev, list) {
+		prev, ok := g.values[wildName]
+		if ok && !g.node(prev, list) {
 			return false
 		}
-		m.values[wildName] = list
+		g.values[wildName] = list
 		return true
 	}
 	for i1 < ns1len || i2 < ns2len {
 		if i1 < ns1len {
-			n1 := ns1.at(i1)
+			n1 := ns1.At(i1)
 			id := fromWildNode(n1)
-			info := m.info(id)
+			info := g.info(id)
 			if info.any {
 				// keep track of where this wildcard
 				// started (if info.name == wildName,
@@ -915,7 +737,7 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 				partialStart = i2
 				push(i1, i2+1)
 			}
-			if i2 < ns2len && wouldMatch() && m.node(n1, ns2.at(i2)) {
+			if i2 < ns2len && wouldMatch() && g.node(n1, ns2.At(i2)) {
 				wildName = ""
 				// ordinary match
 				i1++
@@ -937,22 +759,22 @@ func (m *matcher) nodes(ns1, ns2 nodeList, partial bool) ast.Node {
 	if !wouldMatch() {
 		return nil
 	}
-	return ns2.slice(partialStart, partialEnd)
+	return ns2.Slice(partialStart, partialEnd)
 }
 
-func (m *matcher) nodesMatch(list1, list2 nodeList) bool {
-	return m.nodes(list1, list2, false) != nil
+func (g *G) nodesMatch(list1, list2 gsyntax.NodeList) bool {
+	return g.nodes(list1, list2, false) != nil
 }
 
-func (m *matcher) exprs(exprs1, exprs2 []ast.Expr) bool {
-	return m.nodesMatch(exprList(exprs1), exprList(exprs2))
+func (g *G) exprs(exprs1, exprs2 []ast.Expr) bool {
+	return g.nodesMatch(gsyntax.ExprList(exprs1), gsyntax.ExprList(exprs2))
 }
 
-func (m *matcher) idents(ids1, ids2 []*ast.Ident) bool {
-	return m.nodesMatch(identList(ids1), identList(ids2))
+func (g *G) idents(ids1, ids2 []*ast.Ident) bool {
+	return g.nodesMatch(gsyntax.IdentList(ids1), gsyntax.IdentList(ids2))
 }
 
-func toStmtList(nodes ...ast.Node) stmtList {
+func toStmtList(nodes ...ast.Node) gsyntax.StmtList {
 	var stmts []ast.Stmt
 	for _, node := range nodes {
 		switch x := node.(type) {
@@ -965,10 +787,10 @@ func toStmtList(nodes ...ast.Node) stmtList {
 			panic(fmt.Sprintf("unexpected node type: %T", x))
 		}
 	}
-	return stmtList(stmts)
+	return gsyntax.StmtList(stmts)
 }
 
-func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
+func (g *G) cases(stmts1, stmts2 []ast.Stmt) bool {
 	for _, stmt := range stmts2 {
 		switch stmt.(type) {
 		case *ast.CaseClause, *ast.CommClause:
@@ -1011,26 +833,26 @@ func (m *matcher) cases(stmts1, stmts2 []ast.Stmt) bool {
 		}
 		left = append(left, id)
 	}
-	return m.nodesMatch(identList(left), stmtList(stmts2))
+	return g.nodesMatch(gsyntax.IdentList(left), gsyntax.StmtList(stmts2))
 }
 
-func (m *matcher) stmts(stmts1, stmts2 []ast.Stmt) bool {
-	return m.nodesMatch(stmtList(stmts1), stmtList(stmts2))
+func (g *G) stmts(stmts1, stmts2 []ast.Stmt) bool {
+	return g.nodesMatch(gsyntax.StmtList(stmts1), gsyntax.StmtList(stmts2))
 }
 
-func (m *matcher) specs(specs1, specs2 []ast.Spec) bool {
-	return m.nodesMatch(specList(specs1), specList(specs2))
+func (g *G) specs(specs1, specs2 []ast.Spec) bool {
+	return g.nodesMatch(gsyntax.SpecList(specs1), gsyntax.SpecList(specs2))
 }
 
-func (m *matcher) fields(fields1, fields2 *ast.FieldList) bool {
-	var list1, list2 fieldList
+func (g *G) fields(fields1, fields2 *ast.FieldList) bool {
+	var list1, list2 gsyntax.FieldList
 	if fields1 != nil {
 		list1 = fields1.List
 	}
 	if fields2 != nil {
 		list2 = fields2.List
 	}
-	return m.nodesMatch(list1, list2)
+	return g.nodesMatch(list1, list2)
 }
 
 func fromWildNode(node ast.Node) int {
@@ -1048,73 +870,3 @@ func fromWildNode(node ast.Node) int {
 	}
 	return -1
 }
-
-func nodeLists(n ast.Node) []nodeList {
-	var lists []nodeList
-	addList := func(list nodeList) {
-		if list.len() > 0 {
-			lists = append(lists, list)
-		}
-	}
-	switch x := n.(type) {
-	case nodeList:
-		addList(x)
-	case *ast.CompositeLit:
-		addList(exprList(x.Elts))
-	case *ast.CallExpr:
-		addList(exprList(x.Args))
-	case *ast.AssignStmt:
-		addList(exprList(x.Lhs))
-		addList(exprList(x.Rhs))
-	case *ast.ReturnStmt:
-		addList(exprList(x.Results))
-	case *ast.ValueSpec:
-		addList(exprList(x.Values))
-	case *ast.BlockStmt:
-		addList(stmtList(x.List))
-	case *ast.CaseClause:
-		addList(exprList(x.List))
-		addList(stmtList(x.Body))
-	case *ast.CommClause:
-		addList(stmtList(x.Body))
-	}
-	return lists
-}
-
-type (
-	exprList  []ast.Expr
-	identList []*ast.Ident
-	stmtList  []ast.Stmt
-	specList  []ast.Spec
-	fieldList []*ast.Field
-)
-
-func (l exprList) len() int  { return len(l) }
-func (l identList) len() int { return len(l) }
-func (l stmtList) len() int  { return len(l) }
-func (l specList) len() int  { return len(l) }
-func (l fieldList) len() int { return len(l) }
-
-func (l exprList) at(i int) ast.Node  { return l[i] }
-func (l identList) at(i int) ast.Node { return l[i] }
-func (l stmtList) at(i int) ast.Node  { return l[i] }
-func (l specList) at(i int) ast.Node  { return l[i] }
-func (l fieldList) at(i int) ast.Node { return l[i] }
-
-func (l exprList) slice(i, j int) nodeList  { return l[i:j] }
-func (l identList) slice(i, j int) nodeList { return l[i:j] }
-func (l stmtList) slice(i, j int) nodeList  { return l[i:j] }
-func (l specList) slice(i, j int) nodeList  { return l[i:j] }
-func (l fieldList) slice(i, j int) nodeList { return l[i:j] }
-
-func (l exprList) Pos() token.Pos  { return l[0].Pos() }
-func (l identList) Pos() token.Pos { return l[0].Pos() }
-func (l stmtList) Pos() token.Pos  { return l[0].Pos() }
-func (l specList) Pos() token.Pos  { return l[0].Pos() }
-func (l fieldList) Pos() token.Pos { return l[0].Pos() }
-
-func (l exprList) End() token.Pos  { return l[len(l)-1].End() }
-func (l identList) End() token.Pos { return l[len(l)-1].End() }
-func (l stmtList) End() token.Pos  { return l[len(l)-1].End() }
-func (l specList) End() token.Pos  { return l[len(l)-1].End() }
-func (l fieldList) End() token.Pos { return l[len(l)-1].End() }

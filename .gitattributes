@@ -1,2 +1,5 @@
 # To prevent CRLF breakages on Windows for fragile files, like testdata.
 * -text
+
+# Don't show bundled base64 strings in git diff/grep.
+bundle.go -diff -text

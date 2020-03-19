@@ -4,9 +4,7 @@
 
 Search for Go code using syntax trees. Work in progress.
 
-	gogrep -x 'if $x != nil { return $x, $*_ }'
-
-### Instructions
+### Instructions (TODO: update withthe new interface)
 
 	usage: gogrep commands [packages]
 

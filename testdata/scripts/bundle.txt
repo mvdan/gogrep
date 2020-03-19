@@ -1,0 +1,17 @@
+env GOGREP_SOURCE=/does/not/exist
+! gogrep 'All(`return $x`); All(`$x`)' ./...
+
+env GOGREP_SOURCE=off
+gogrep 'All(`return $x`); All(`$x`)' ./...
+cmp stdout stdout.golden
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+-- f.go --
+package bar
+
+func True() bool { return true }
+-- stdout.golden --
+f.go:3:27: true

@@ -1,0 +1,47 @@
+gogrep 'All(`foo`); Suggest(`bar`)' ./...
+! stdout .
+gogrep 'All(`go func() { $f($*a) }()`); Suggest(`go $f($*a)`)' ./...
+! stdout .
+
+cmp f.go f.go.golden
+cmp baz/f.go baz/f.go.golden
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+
+-- f.go --
+package p
+
+func foo() // TODO: convert to "bar"
+func bar()
+func f1() { foo() }
+-- f.go.golden --
+package p
+
+func foo() // TODO: convert to "bar"
+func bar()
+func f1() { bar() }
+-- baz/f.go --
+// package p doc
+package p
+
+func fn(int)
+func f2() {
+	go func() {
+		// comment
+		fn(0)
+	}()
+}
+-- baz/f.go.golden --
+// package p doc
+package p
+
+func fn(int)
+func f2() {
+
+	// comment
+	go fn(0)
+
+}

@@ -1,29 +1,92 @@
 // Copyright (c) 2018, Daniel Martí <mvdan@mvdan.cc>
 // See LICENSE for licensing information
 
-package main
+package nls
 
 import (
 	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
+	"os"
 	"reflect"
+
+	"mvdan.cc/gogrep/gsyntax"
 )
 
-func (m *matcher) cmdSubst(cmd exprCmd, subs []submatch) []submatch {
-	for i := range subs {
-		sub := &subs[i]
-		nodeCopy, _ := m.parseExpr(cmd.src)
+func (g *G) Replace(pattern string) {
+	for i := range g.current {
+		sub := &g.current[i]
+		nodeCopy, _ := g.parseExpr(pattern)
 		// since we'll want to set positions within the file's
 		// FileSet
 		scrubPositions(nodeCopy)
 
-		m.fillParents(nodeCopy)
-		nodeCopy = m.fillValues(nodeCopy, sub.values)
-		m.substNode(sub.node, nodeCopy)
-		sub.node = nodeCopy
+		g.fillParents(nodeCopy)
+		nodeCopy = g.fillValues(nodeCopy, sub.Values)
+		g.substNode(sub.Node, nodeCopy)
+		sub.Node = nodeCopy
 	}
-	return subs
+}
+
+// Suggest replaces the current set of matches with the given pattern. If the
+// input came from files on disk, the files are updated. Otherwise, the modified
+// matches are kept in the current set, to be shown as results.
+func (g *G) Suggest(pattern string) {
+	g.Replace(pattern)
+
+	// below is the old Write
+
+	seenRoot := make(map[nodePosHash]bool)
+	filePaths := make(map[*ast.File]string)
+	var next []Match
+	for _, sub := range g.current {
+		root := g.nodeRoot(sub.Node)
+		hash := posHash(root)
+		if seenRoot[hash] {
+			continue // avoid dups
+		}
+		seenRoot[hash] = true
+		file, ok := root.(*ast.File)
+		if ok {
+			path := g.Fset.Position(file.Package).Filename
+			if path != "" {
+				// write to disk
+				filePaths[file] = path
+				continue
+			}
+		}
+		// pass it on, to print to stdout
+		next = append(next, Match{Node: root})
+	}
+	for file, path := range filePaths {
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0)
+		if err != nil {
+			// TODO: return errors instead
+			panic(err)
+		}
+		if err := printConfig.Fprint(f, g.Fset, file); err != nil {
+			// TODO: return errors instead
+			panic(err)
+		}
+	}
+	g.current = next
+}
+
+var printConfig = printer.Config{
+	Mode:     printer.UseSpaces | printer.TabIndent,
+	Tabwidth: 8,
+}
+
+func (g *G) nodeRoot(node ast.Node) ast.Node {
+	parent := g.parentOf(node)
+	if parent == nil {
+		return node
+	}
+	if _, ok := parent.(gsyntax.NodeList); ok {
+		return parent
+	}
+	return g.nodeRoot(parent)
 }
 
 type topNode struct {
@@ -33,45 +96,45 @@ type topNode struct {
 func (t topNode) Pos() token.Pos { return t.Node.Pos() }
 func (t topNode) End() token.Pos { return t.Node.End() }
 
-func (m *matcher) fillValues(node ast.Node, values map[string]ast.Node) ast.Node {
+func (g *G) fillValues(node ast.Node, values map[string]ast.Node) ast.Node {
 	// node might not have a parent, in which case we need to set an
 	// artificial one. Its pointer interface is a copy, so we must also
 	// return it.
 	top := &topNode{node}
-	m.setParentOf(node, top)
+	g.setParentOf(node, top)
 
-	inspect(node, func(node ast.Node) bool {
+	gsyntax.Inspect(node, func(node ast.Node) bool {
 		id := fromWildNode(node)
-		info := m.info(id)
+		info := g.info(id)
 		if info.name == "" {
 			return true
 		}
 		prev := values[info.name]
 		switch prev.(type) {
-		case exprList:
-			node = exprList([]ast.Expr{
+		case gsyntax.ExprList:
+			node = gsyntax.ExprList([]ast.Expr{
 				node.(*ast.Ident),
 			})
-		case stmtList:
+		case gsyntax.StmtList:
 			if ident, ok := node.(*ast.Ident); ok {
 				node = &ast.ExprStmt{X: ident}
 			}
-			node = stmtList([]ast.Stmt{
+			node = gsyntax.StmtList([]ast.Stmt{
 				node.(*ast.ExprStmt),
 			})
 		}
-		m.substNode(node, prev)
+		g.substNode(node, prev)
 		return true
 	})
-	m.setParentOf(node, nil)
+	g.setParentOf(node, nil)
 	return top.Node
 }
 
-func (m *matcher) substNode(oldNode, newNode ast.Node) {
-	parent := m.parentOf(oldNode)
-	m.setParentOf(newNode, parent)
+func (g *G) substNode(oldNode, newNode ast.Node) {
+	parent := g.parentOf(oldNode)
+	g.setParentOf(newNode, parent)
 
-	ptr := m.nodePtr(oldNode)
+	ptr := g.nodePtr(oldNode)
 	switch x := ptr.(type) {
 	case **ast.Ident:
 		*x = newNode.(*ast.Ident)
@@ -83,7 +146,7 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 		switch y := newNode.(type) {
 		case ast.Expr:
 			stmt := &ast.ExprStmt{X: y}
-			m.setParentOf(stmt, parent)
+			g.setParentOf(stmt, parent)
 			*x = stmt
 		case ast.Stmt:
 			*x = y
@@ -91,7 +154,7 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 			panic(fmt.Sprintf("cannot replace stmt with %T", y))
 		}
 	case *[]ast.Expr:
-		oldList := oldNode.(exprList)
+		oldList := oldNode.(gsyntax.ExprList)
 		var first, last []ast.Expr
 		for i, expr := range *x {
 			if expr == oldList[0] {
@@ -103,14 +166,14 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 		switch y := newNode.(type) {
 		case ast.Expr:
 			*x = append(first, y)
-		case exprList:
+		case gsyntax.ExprList:
 			*x = append(first, y...)
 		default:
 			panic(fmt.Sprintf("cannot replace exprs with %T", y))
 		}
 		*x = append(*x, last...)
 	case *[]ast.Stmt:
-		oldList := oldNode.(stmtList)
+		oldList := oldNode.(gsyntax.StmtList)
 		var first, last []ast.Stmt
 		for i, stmt := range *x {
 			if stmt == oldList[0] {
@@ -122,11 +185,11 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 		switch y := newNode.(type) {
 		case ast.Expr:
 			stmt := &ast.ExprStmt{X: y}
-			m.setParentOf(stmt, parent)
+			g.setParentOf(stmt, parent)
 			*x = append(first, stmt)
 		case ast.Stmt:
 			*x = append(first, y)
-		case stmtList:
+		case gsyntax.StmtList:
 			*x = append(first, y...)
 		default:
 			panic(fmt.Sprintf("cannot replace stmts with %T", y))
@@ -142,31 +205,31 @@ func (m *matcher) substNode(oldNode, newNode ast.Node) {
 	fixPositions(parent)
 }
 
-func (m *matcher) parentOf(node ast.Node) ast.Node {
-	list, ok := node.(nodeList)
+func (g *G) parentOf(node ast.Node) ast.Node {
+	list, ok := node.(gsyntax.NodeList)
 	if ok {
-		node = list.at(0)
+		node = list.At(0)
 	}
-	return m.parents[node]
+	return g.parents[node]
 }
 
-func (m *matcher) setParentOf(node, parent ast.Node) {
-	list, ok := node.(nodeList)
+func (g *G) setParentOf(node, parent ast.Node) {
+	list, ok := node.(gsyntax.NodeList)
 	if ok {
-		if list.len() == 0 {
+		if list.Len() == 0 {
 			return
 		}
-		node = list.at(0)
+		node = list.At(0)
 	}
-	m.parents[node] = parent
+	g.parents[node] = parent
 }
 
-func (m *matcher) nodePtr(node ast.Node) interface{} {
-	list, wantSlice := node.(nodeList)
+func (g *G) nodePtr(node ast.Node) interface{} {
+	list, wantSlice := node.(gsyntax.NodeList)
 	if wantSlice {
-		node = list.at(0)
+		node = list.At(0)
 	}
-	parent := m.parentOf(node)
+	parent := g.parentOf(node)
 	if parent == nil {
 		return nil
 	}
@@ -195,7 +258,7 @@ func (m *matcher) nodePtr(node ast.Node) interface{} {
 }
 
 // nodePosHash is an ast.Node that can always be used as a key in maps,
-// even for nodes that are slices like nodeList.
+// even for nodes that are slices like NodeList.
 type nodePosHash struct {
 	pos, end token.Pos
 }
@@ -210,7 +273,7 @@ func posHash(node ast.Node) nodePosHash {
 var posType = reflect.TypeOf(token.NoPos)
 
 func scrubPositions(node ast.Node) {
-	inspect(node, func(node ast.Node) bool {
+	gsyntax.Inspect(node, func(node ast.Node) bool {
 		v := reflect.ValueOf(node)
 		if v.Kind() != reflect.Ptr {
 			return true

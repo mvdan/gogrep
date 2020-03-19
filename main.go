@@ -4,329 +4,304 @@
 package main
 
 import (
-	"bytes"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/printer"
 	"go/token"
-	"go/types"
-	"io"
+	"io/ioutil"
 	"os"
-	"regexp"
-	"strconv"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"text/template"
+
+	"golang.org/x/tools/go/packages"
+	"mvdan.cc/gogrep/internal/load"
 )
 
 var usage = func() {
-	fmt.Fprint(os.Stderr, `usage: gogrep commands [packages]
+	fmt.Fprint(os.Stderr, `usage: gogrep query [flags] [packages]
 
-gogrep performs a query on the given Go packages.
+gogrep runs queries on Go source code.
 
-  -r      search dependencies recursively too
-  -tests  search test files too (and direct test deps, with -r)
+The query can be inline source, a Go file, or a pattern of Go packages. Note that the 'gogrep' build tag is used when loading queries via package patterns.
 
-A command is one of the following:
+    gogrep 'return $x' ./...
+    gogrep returns_grep.go ./...
+    gogrep ./grep/... ./...
 
-  -x pattern    find all nodes matching a pattern
-  -g pattern    discard nodes not matching a pattern
-  -v pattern    discard nodes matching a pattern
-  -a attribute  discard nodes without an attribute
-  -s pattern    substitute with a given syntax tree
-  -p number     navigate up a number of node parents
-  -w            write the entire source code back
+The flags include:
 
-A pattern is a piece of Go code which may include dollar expressions. It can be
-a number of statements, a number of expressions, a declaration, or an entire
-file.
+    -tests  query test packages too
 
-A dollar expression consist of '$' and a name. Dollar expressions with the same
-name within a query always match the same node, excluding "_". Example:
+The remaining arguments are package patterns to query. See 'go help packages'.
 
-       -x '$x.$_ = $x' # assignment of self to a field in self
-
-If '*' is before the name, it will match any number of nodes. Example:
-
-       -x 'fmt.Fprintf(os.Stdout, $*_)' # all Fprintfs on stdout
-
-By default, the resulting nodes will be printed one per line to standard output.
-To update the input files, use -w.
+To see the documentation for the query language, see https://godoc.org/mvdan.cc/gogrep/nls.
 `)
 }
 
-func main() {
-	m := matcher{
-		out: os.Stdout,
-		ctx: &build.Default,
-	}
-	err := m.fromArgs(".", os.Args[1:])
-	if err != nil {
+func main() { os.Exit(main1()) }
+
+func main1() int {
+	if err := mainerr(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
-type matcher struct {
-	out io.Writer
-	ctx *build.Context
-
-	fset *token.FileSet
-
-	parents map[ast.Node]ast.Node
-
-	recursive, tests bool
-	aggressive       bool
-
-	// information about variables (wildcards), by id (which is an
-	// integer starting at 0)
-	vars []varInfo
-
-	// node values recorded by name, excluding "_" (used only by the
-	// actual matching phase)
-	values map[string]ast.Node
-	scope  *types.Scope
-
-	*types.Info
-	stdImporter types.Importer
-}
-
-type varInfo struct {
-	name string
-	any  bool
-}
-
-func (m *matcher) info(id int) varInfo {
-	if id < 0 {
-		return varInfo{}
+func mainerr() error {
+	flag.Parse()
+	args := flag.Args()
+	if len(args) == 0 {
+		flag.Usage()
 	}
-	return m.vars[id]
-}
-
-type exprCmd struct {
-	name  string
-	src   string
-	value interface{}
-}
-
-type strCmdFlag struct {
-	name string
-	cmds *[]exprCmd
-}
-
-func (o *strCmdFlag) String() string { return "" }
-func (o *strCmdFlag) Set(val string) error {
-	*o.cmds = append(*o.cmds, exprCmd{name: o.name, src: val})
-	return nil
-}
-
-type boolCmdFlag struct {
-	name string
-	cmds *[]exprCmd
-}
-
-func (o *boolCmdFlag) String() string { return "" }
-func (o *boolCmdFlag) Set(val string) error {
-	if val != "true" {
-		return fmt.Errorf("flag can only be true")
-	}
-	*o.cmds = append(*o.cmds, exprCmd{name: o.name})
-	return nil
-}
-func (o *boolCmdFlag) IsBoolFlag() bool { return true }
-
-func (m *matcher) fromArgs(wd string, args []string) error {
-	m.fset = token.NewFileSet()
-	cmds, args, err := m.parseCmds(args)
+	dir, err := ioutil.TempDir("", "gogrep")
 	if err != nil {
 		return err
 	}
-	pkgs, err := m.load(wd, args...)
-	if err != nil {
-		return err
-	}
-	var all []ast.Node
-	for _, pkg := range pkgs {
-		m.Info = pkg.TypesInfo
-		nodes := make([]ast.Node, len(pkg.Syntax))
-		for i, f := range pkg.Syntax {
-			nodes[i] = f
+	defer os.RemoveAll(dir)
+	binPath := filepath.Join(dir, "gogrep-main")
+	mainData := mainTmplData{}
+
+	if strings.ContainsAny(args[0], " |(){};") {
+		// Add the source files for the entry point and the command line
+		// function.
+		calls := strings.Split(args[0], "; ")
+		if err := tmplFile(dir, "cmdline.go", funcTmpl, calls); err != nil {
+			return err
 		}
-		all = append(all, m.matches(cmds, nodes)...)
-	}
-	for _, n := range all {
-		fpos := m.fset.Position(n.Pos())
-		if strings.HasPrefix(fpos.Filename, wd) {
-			fpos.Filename = fpos.Filename[len(wd)+1:]
+		mainData.Funcs = []string{"CommandLine"}
+		if err := tmplFile(dir, "gogrep_main.go", mainTmpl, mainData); err != nil {
+			return err
 		}
-		fmt.Fprintf(m.out, "%v: %s\n", fpos, singleLinePrint(n))
-	}
-	return nil
-}
+		mainData.Files = append(mainData.Files, "cmdline.go", "gogrep_main.go")
 
-func (m *matcher) parseCmds(args []string) ([]exprCmd, []string, error) {
-	flagSet := flag.NewFlagSet("gogrep", flag.ExitOnError)
-	flagSet.Usage = usage
-	flagSet.BoolVar(&m.recursive, "r", false, "search dependencies recursively too")
-	flagSet.BoolVar(&m.tests, "tests", false, "search test files too (and direct test deps, with -r)")
-
-	var cmds []exprCmd
-	flagSet.Var(&strCmdFlag{
-		name: "x",
-		cmds: &cmds,
-	}, "x", "")
-	flagSet.Var(&strCmdFlag{
-		name: "g",
-		cmds: &cmds,
-	}, "g", "")
-	flagSet.Var(&strCmdFlag{
-		name: "v",
-		cmds: &cmds,
-	}, "v", "")
-	flagSet.Var(&strCmdFlag{
-		name: "a",
-		cmds: &cmds,
-	}, "a", "")
-	flagSet.Var(&strCmdFlag{
-		name: "s",
-		cmds: &cmds,
-	}, "s", "")
-	flagSet.Var(&strCmdFlag{
-		name: "p",
-		cmds: &cmds,
-	}, "p", "")
-	flagSet.Var(&boolCmdFlag{
-		name: "w",
-		cmds: &cmds,
-	}, "w", "")
-	flagSet.Parse(args)
-	paths := flagSet.Args()
-
-	if len(cmds) < 1 {
-		return nil, nil, fmt.Errorf("need at least one command")
-	}
-	for i, cmd := range cmds {
-		switch cmd.name {
-		case "w":
-			continue // no expr
-		case "p":
-			n, err := strconv.Atoi(cmd.src)
-			if err != nil {
-				return nil, nil, err
+		bundlePath := "./bundled-gogrep"
+		if path := sourceDir(); path != "" {
+			bundlePath = path
+		} else {
+			for _, file := range bundledFiles {
+				name := filepath.Join(dir, "bundled-gogrep", file.name)
+				if err := os.MkdirAll(filepath.Dir(name), 0777); err != nil {
+					return err
+				}
+				f, err := os.Create(name)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				content, err := base64.RawStdEncoding.DecodeString(file.encContent)
+				if err != nil {
+					return err
+				}
+				if _, err := f.Write(content); err != nil {
+					return err
+				}
+				if err := f.Close(); err != nil {
+					return err
+				}
 			}
-			cmds[i].value = n
-		case "a":
-			m, err := m.parseAttrs(cmd.src)
-			if err != nil {
-				return nil, nil, fmt.Errorf("cannot parse mods: %v", err)
+		}
+		// Add a go.mod with a replace to the gogrep source code.
+		if err := tmplFile(dir, "go.mod", modTmpl, bundlePath); err != nil {
+			return err
+		}
+		mainData.Dir = dir // use our go.mod above
+	} else {
+		fset := token.NewFileSet()
+		cfg := &packages.Config{
+			Mode:       packages.NeedName | packages.NeedFiles | packages.NeedSyntax,
+			BuildFlags: []string{"-tags=gogrep"},
+			Fset:       fset,
+		}
+		grepPkgs, err := packages.Load(cfg, args[0])
+		if err != nil {
+			return fmt.Errorf("error loading gogrep funcs: %v", err)
+		}
+		if err := load.PkgsErr(grepPkgs); err != nil {
+			return err
+		}
+		if len(grepPkgs) == 0 {
+			return fmt.Errorf("first argument did not match any packages")
+		}
+		for _, pkg := range grepPkgs {
+			imported := false
+			for _, file := range pkg.Syntax {
+				fileCopied := false
+				for _, decl := range file.Decls {
+					fd, ok := decl.(*ast.FuncDecl)
+					if !ok {
+						continue
+					}
+					if !grepFunc(fd) {
+						continue
+					}
+					name := fd.Name.Name
+					if pkg.PkgPath != "command-line-arguments" {
+						// Packages we can import.
+						if !imported {
+							mainData.Imports = append(mainData.Imports, pkg.PkgPath)
+							imported = true
+						}
+						name = path.Base(pkg.PkgPath) + "." + name
+					} else if !fileCopied {
+						// An ad-hoc package; build with it directly.
+						file.Name.Name = "main"
+						name := fset.Position(file.Pos()).Filename
+						f, err := os.Create(filepath.Join(dir, filepath.Base(name)))
+						if err != nil {
+							return err
+						}
+						if err := printer.Fprint(f, fset, file); err != nil {
+							return err
+						}
+						if err := f.Close(); err != nil {
+							return err
+						}
+						mainData.Files = append(mainData.Files, f.Name())
+						fileCopied = true
+					}
+					mainData.Funcs = append(mainData.Funcs, name)
+				}
 			}
-			cmds[i].value = m
-		default:
-			node, err := m.parseExpr(cmd.src)
-			if err != nil {
-				return nil, nil, err
-			}
-			cmds[i].value = node
+		}
+		if err := tmplFile(dir, "gogrep_main.go", mainTmpl, mainData); err != nil {
+			return err
+		}
+		mainData.Files = append(mainData.Files, filepath.Join(dir, "gogrep_main.go"))
+	}
+
+	// Build the binary.
+	{
+		goArgs := []string{"build", "-tags=gogrep", "-o=" + binPath}
+		cmd := exec.Command("go", append(goArgs, mainData.Files...)...)
+		cmd.Dir = mainData.Dir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
 		}
 	}
-	return cmds, paths, nil
+	// Run the built program.
+	cmd := exec.Command(binPath, args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
-type bufferJoinLines struct {
-	bytes.Buffer
-	last string
-}
-
-var rxNeedSemicolon = regexp.MustCompile(`([])}a-zA-Z0-9"'` + "`" + `]|\+\+|--)$`)
-
-func (b *bufferJoinLines) Write(p []byte) (n int, err error) {
-	if string(p) == "\n" {
-		if b.last == "\n" {
-			return 1, nil
+func sourceDir() string {
+	if path := os.Getenv("GOGREP_SOURCE"); path != "" {
+		if path == "off" {
+			return "" // force using bundled source
 		}
-		if rxNeedSemicolon.MatchString(b.last) {
-			b.Buffer.WriteByte(';')
-		}
-		b.Buffer.WriteByte(' ')
-		b.last = "\n"
-		return 1, nil
+		return path // we assume it's absolute
 	}
-	p = bytes.Trim(p, "\t")
-	n, err = b.Buffer.Write(p)
-	b.last = string(p)
-	return
+	_, file, _, _ := runtime.Caller(0)
+	if !filepath.IsAbs(file) {
+		return "" // e.g. used -trimpath
+	}
+	if _, err := os.Stat(file); err != nil {
+		return "" // source is now moved or deleted
+	}
+	return filepath.Dir(file)
 }
 
-func (b *bufferJoinLines) String() string {
-	return strings.TrimSuffix(b.Buffer.String(), "; ")
-}
-
-// inspect is like ast.Inspect, but it supports our extra nodeList Node
-// type (only at the top level).
-func inspect(node ast.Node, fn func(ast.Node) bool) {
-	// ast.Walk barfs on ast.Node types it doesn't know, so
-	// do the first level manually here
-	list, ok := node.(nodeList)
+func grepFunc(fd *ast.FuncDecl) bool {
+	if !token.IsExported(fd.Name.Name) {
+		return false
+	}
+	if fd.Recv != nil || fd.Type.Results != nil || fd.Type.Params == nil {
+		return false
+	}
+	if len(fd.Type.Params.List) != 1 {
+		return false
+	}
+	param := fd.Type.Params.List[0]
+	if len(param.Names) > 1 {
+		return false
+	}
+	star, ok := param.Type.(*ast.StarExpr)
 	if !ok {
-		ast.Inspect(node, fn)
-		return
+		return false
 	}
-	if !fn(list) {
-		return
+	switch typ := star.X.(type) {
+	case *ast.Ident:
+		return typ.Name == "G"
+	case *ast.SelectorExpr:
+		id, ok := typ.X.(*ast.Ident)
+		return ok && id.Name == "nls" && typ.Sel.Name == "G"
 	}
-	for i := 0; i < list.len(); i++ {
-		ast.Inspect(list.at(i), fn)
-	}
-	fn(nil)
+	return false
 }
 
-var emptyFset = token.NewFileSet()
-
-func singleLinePrint(node ast.Node) string {
-	var buf bufferJoinLines
-	inspect(node, func(node ast.Node) bool {
-		bl, ok := node.(*ast.BasicLit)
-		if !ok || bl.Kind != token.STRING {
-			return true
-		}
-		if !strings.HasPrefix(bl.Value, "`") {
-			return true
-		}
-		if !strings.Contains(bl.Value, "\n") {
-			return true
-		}
-		bl.Value = strconv.Quote(bl.Value[1 : len(bl.Value)-1])
-		return true
-	})
-	printNode(&buf, emptyFset, node)
-	return buf.String()
-}
-
-func printNode(w io.Writer, fset *token.FileSet, node ast.Node) {
-	switch x := node.(type) {
-	case exprList:
-		if len(x) == 0 {
-			return
-		}
-		printNode(w, fset, x[0])
-		for _, n := range x[1:] {
-			fmt.Fprintf(w, ", ")
-			printNode(w, fset, n)
-		}
-	case stmtList:
-		if len(x) == 0 {
-			return
-		}
-		printNode(w, fset, x[0])
-		for _, n := range x[1:] {
-			fmt.Fprintf(w, "; ")
-			printNode(w, fset, n)
-		}
-	default:
-		err := printer.Fprint(w, fset, node)
-		if err != nil && strings.Contains(err.Error(), "go/printer: unsupported node type") {
-			// Should never happen, but make it obvious when it does.
-			panic(fmt.Errorf("cannot print node %T: %v", node, err))
-		}
+func tmplFile(dir, name string, tmpl *template.Template, data interface{}) error {
+	f, err := os.Create(filepath.Join(dir, name))
+	if err != nil {
+		return err
 	}
+	defer f.Close()
+	if err := tmpl.Execute(f, data); err != nil {
+		return err
+	}
+	return f.Close()
 }
+
+//go:generate go run gen_bundle.go
+//go:generate gofmt -s -w bundle.go
+
+var modTmpl = template.Must(template.New("").Parse(`
+module _m
+
+go 1.14
+
+require mvdan.cc/gogrep v0.0.0-00010101000000-000000000000
+
+replace mvdan.cc/gogrep => {{ . }}
+`))
+
+var funcTmpl = template.Must(template.New("").Parse(`
+package main
+
+import . "mvdan.cc/gogrep/nls"
+
+func CommandLine(g *G) {
+{{ range $_, $call := . }}	{{ $call }}(g)
+{{ end }}
+}
+`))
+
+type mainTmplData struct {
+	Imports []string // to add as Go imports
+	Dir     string   // where to run the build from
+	Files   []string // files to build directly; for ad-hoc packages
+	Funcs   []string // qualified if needed, e.g. pkg.FooFunc
+}
+
+var mainTmpl = template.Must(template.New("").Parse(`
+// +build ignore
+
+package main
+
+import (
+	"os"
+
+	"mvdan.cc/gogrep/mainpkg"
+	"mvdan.cc/gogrep/nls"
+
+{{ range $_, $path := .Imports }}	{{ printf "%q" $path }}
+{{ end }}
+)
+
+var grepFuncs = []nls.Function{
+{{ range $_, $fn := .Funcs }}	{{ $fn }},
+{{ end }}
+}
+
+func main() { os.Exit(mainpkg.Run(grepFuncs)) }
+`))

@@ -1,0 +1,53 @@
+exec go mod edit -replace=mvdan.cc/gogrep=${MOD_DIR}
+
+gogrep ./... ./...
+cmp stdout stdout.golden
+
+gogrep gogrep.go .
+stdout 'f.go:3:27: true'
+! stdout 'baz/f.go'
+
+-- go.mod --
+module foo.test/bar
+
+go 1.14
+
+-- gogrep.go --
+// +build gogrep
+
+package bar
+
+import "mvdan.cc/gogrep/nls"
+
+func ReturnValues(g *nls.G) {
+	g.All(`return $x`)
+	g.All(`$x`)
+}
+
+-- gogrep2/gogrep2.go --
+// +build gogrep
+
+package gogrep2
+
+import "mvdan.cc/gogrep/nls"
+
+func FuncNames(g *nls.G) {
+	g.All(`func $f($*_) $*_ { $*_ }`)
+	g.All(`$f`)
+}
+
+-- f.go --
+package bar
+
+func True() bool { return true }
+
+-- baz/f.go --
+package baz
+
+func Baz() string { return "baz" }
+
+-- stdout.golden --
+f.go:3:27: true
+f.go:3:6: True
+baz/f.go:3:28: "baz"
+baz/f.go:3:6: Baz

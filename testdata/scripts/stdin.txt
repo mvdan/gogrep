@@ -1,0 +1,10 @@
+stdin stdin.go
+gogrep 'All("return $x"); All("$x")'
+cmp stdout stdout.golden
+
+-- stdin.go --
+return x; return y
+
+-- stdout.golden --
+1:30: x
+1:40: y

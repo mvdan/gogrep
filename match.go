@@ -1045,6 +1045,8 @@ func fromWildNode(node ast.Node) int {
 		if len(node.Names) == 0 && node.Tag == nil {
 			return fromWildNode(node.Type)
 		}
+	case *ast.KeyValueExpr:
+		return fromWildNode(node.Value)
 	}
 	return -1
 }

@@ -500,6 +500,9 @@ func TestMatch(t *testing.T) {
 			[]string{"-x", "struct{$*_; Foo $t; $*_}"},
 			"type T struct{Foo string; a int; B}", 1,
 		},
+		// structure literal
+		{[]string{"-x", "struct{a int}{a: $_}"}, "struct{a int}{a: 1}", 1},
+		{[]string{"-x", "struct{a int}{a: $*_}"}, "struct{a int}{a: 1}", 1},
 
 		// value specs
 		{[]string{"-x", "$_ int"}, "var a int", 1},

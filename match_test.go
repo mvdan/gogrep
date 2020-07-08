@@ -208,13 +208,26 @@ func TestMatch(t *testing.T) {
 			`import "io"; var r io.Reader`, 0,
 		},
 		{
-			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
-			`var _ interface{} = 0`, 0,
+			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "!asgn(*url.URL)"},
+			`var _ interface{} = 0`, 1,
 		},
 		{
 			[]string{"-x", "var $_ $_ = $x", "-x", "$x", "-a", "asgn(*url.URL)"},
 			`var _ interface{} = nil`, 1,
 		},
+		// TODO: why do these err expressions have invalid types?
+		// {
+		// 	[]string{"-x", "err", "-a", "!asgn(error)"},
+		// 	`err := fmt.Errorf("foo")`, 0,
+		// },
+		// {
+		// 	[]string{"-x", "err", "-a", "asgn(error)"},
+		// 	`err := fmt.Errorf("foo")`, 1,
+		// },
+		// {
+		// 	[]string{"-x", "err", "-a", "!asgn(error)"},
+		// 	`err := fmt.Sprint("bar")`, 1,
+		// },
 
 		// type conversions
 		{

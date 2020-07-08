@@ -152,7 +152,9 @@ func (m *matcher) cmdAttr(cmd exprCmd, subs []submatch) []submatch {
 	var matches []submatch
 	for _, sub := range subs {
 		m.values = sub.values
-		if m.attrApplies(sub.node, cmd.value.(attribute)) {
+		attr := cmd.value.(attribute)
+		got := m.attrApplies(sub.node, attr.under)
+		if got == !attr.neg {
 			matches = append(matches, sub)
 		}
 	}

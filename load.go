@@ -12,10 +12,10 @@ import (
 )
 
 func (m *matcher) load(wd string, args ...string) ([]*packages.Package, error) {
-	mode := packages.NeedName | packages.NeedImports | packages.NeedSyntax |
+	mode := packages.NeedName | packages.NeedSyntax |
 		packages.NeedTypes | packages.NeedTypesInfo
 	if m.recursive { // need the syntax trees for the dependencies too
-		mode |= packages.NeedDeps
+		mode |= packages.NeedDeps | packages.NeedImports
 	}
 	cfg := &packages.Config{
 		Mode:  mode,

@@ -1,5 +1,5 @@
 module mvdan.cc/gogrep
 
-require golang.org/x/tools v0.0.0-20191223235410-3721262b3e7c
+require golang.org/x/tools v0.1.0
 
 go 1.13

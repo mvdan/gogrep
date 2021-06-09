@@ -20,6 +20,7 @@ A command is of the form "-A pattern", where -A is one of:
        -v  discard nodes matching a pattern
        -a  filter nodes by certain attributes
        -s  substitute with a given syntax tree
+       -p number     navigate up a number of node parents
        -w  write source back to disk or stdout
 
 A pattern is a piece of Go code which may include wildcards. It can be:
@@ -51,3 +52,30 @@ Here are two simple examples of the -a operand:
 
        gogrep -x '$x + $y'                   // will match both numerical and string "+" operations
        gogrep -x '$x + $y' -a 'type(string)' // matches only string concatenations
+
+The attributes understood by the -a operand are as follows:
+
+	comp
+		The node's type is comparable
+	addr
+		The node's type is addressable
+	rx(regexp)
+		The node is an identifier that matches the regular expression.
+	type(type)
+		The node has the given Go type.
+		TODO how are packages referred to?
+	asgn(type)
+		The node is assignable to the given Go type
+	conv(type)
+		The node is convertable to the given Go type
+	is(kind)
+		The node has a particular kind, one of the following:
+			basic
+			array
+			slice
+			struct
+			interface
+			pointer
+			func
+			map
+			chan

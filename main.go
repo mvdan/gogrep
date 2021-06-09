@@ -37,12 +37,19 @@ A command is one of the following:
   -p number     navigate up a number of node parents
   -w            write the entire source code back
 
-A pattern is a piece of Go code which may include dollar expressions. It can be
-a number of statements, a number of expressions, a declaration, or an entire
-file.
+By default, the resulting nodes will be printed one per line to standard output.
+To update the input files, use -w.
 
-A dollar expression consist of '$' and a name. Dollar expressions with the same
-name within a query always match the same node, excluding "_". Example:
+A pattern is a piece of Go code which may include wildcards. It can be:
+
+       a statement (many if split by semicolons)
+       an expression (many if split by commas)
+       a type expression
+       a top-level declaration (var, func, const)
+       an entire file
+
+Wildcards consist of $ and a name. All wildcards with the same name
+within an expression must match the same node, excluding "_". Example:
 
        -x '$x.$_ = $x' # assignment of self to a field in self
 
@@ -50,8 +57,45 @@ If '*' is before the name, it will match any number of nodes. Example:
 
        -x 'fmt.Fprintf(os.Stdout, $*_)' # all Fprintfs on stdout
 
-By default, the resulting nodes will be printed one per line to standard output.
-To update the input files, use -w.
+* can also be used to match optional nodes, like:
+
+	for $*_ { $*_ }    // will match all for loops
+	if $*_; $b { $*_ } // will match all ifs with condition $b
+
+The nodes resulting from applying the commands will be printed line by
+line to standard output.
+
+Here are two simple examples of the -a operand:
+
+       gogrep -x '$x + $y'                   // will match both numerical and string "+" operations
+       gogrep -x '$x + $y' -a 'type(string)' // matches only string concatenations
+
+The attributes understood by the -a operand are as follows:
+
+	comp
+		The node's type is comparable
+	addr
+		The node's type is addressable
+	rx(regexp)
+		The node is an identifier that matches the regular expression.
+	type(type)
+		The node has the given Go type.
+		TODO how are packages referred to?
+	asgn(type)
+		The node is assignable to the given Go type
+	conv(type)
+		The node is convertable to the given Go type
+	is(kind)
+		The node has a particular kind, one of the following:
+			basic
+			array
+			slice
+			struct
+			interface
+			pointer
+			func
+			map
+			chan
 `)
 }
 

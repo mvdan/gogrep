@@ -2,9 +2,12 @@
 
 	GO111MODULE=on go get mvdan.cc/gogrep
 
-Search for Go code using syntax trees. Work in progress.
+Search for Go code using syntax trees.
 
 	gogrep -x 'if $x != nil { return $x, $*_ }'
+
+Note that this project is **no longer being developed**.
+See https://github.com/mvdan/gogrep/issues/64 for more details.
 
 ### Instructions
 
